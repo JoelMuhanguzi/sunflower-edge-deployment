@@ -13,14 +13,16 @@ It is written as a reproducible log, including the problems we hit and how they 
 | Inference engine (text + audio-in) | [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-cli`, `llama-mtmd-cli`) |
 | Speech output (TTS) | `facebook/mms-tts-*` (Meta, via `transformers`) and Sunbird's own VITS checkpoints |
 | Target device | Raspberry Pi 4 Model B Rev 1.5, 8GB RAM, Debian 13 (trixie), 64-bit |
-| Result | Full pipeline — speech/text in, understanding, speech out — confirmed working natively on-device, fully offline |
+| Result | Full pipeline — live speech in (USB mic), understanding, live speech out (3.5mm headset) — confirmed working natively on-device, fully offline, including a real-time round trip (spoken English in, spoken Luganda translation out) |
 
-This project ended up covering three connected pieces, each documented in its own part below:
+This project ended up covering four connected pieces, each documented in its own part below:
 
 1. **[Part 1](#part-1--text-understanding-and-generation)** — deploying the text backbone (translation, chat)
 2. **[Part 2](#part-2--audio-input-speech-understanding)** — adding audio input (speech → text) via llama.cpp's multimodal projector
 3. **[Part 3](#part-3--text-to-speech-output)** — adding speech output (text → audio), after surveying Sunbird's wider model catalog and ruling out two other TTS approaches
-4. **[Benchmarks](#benchmarks)** — inference speed, load time, memory footprint, and quantization size comparisons, measured on the actual Pi hardware
+4. **[Part 4](#part-4--live-audio-io-and-an-interactive-demo)** — wiring up a real USB microphone and headset for live (not file-based) interaction, and a menu-driven demo script tying all four modes together
+5. **[Benchmarks](#benchmarks)** — inference speed, load time, memory footprint, and quantization size comparisons, measured on the actual Pi hardware
+6. **[Alternative runtime evaluated](#alternative-runtime-evaluated-litert-lm)** — a side-by-side attempt at Google's LiteRT-LM toolchain as a possible replacement for llama.cpp, and why we didn't switch
 
 ## Why this path
 
@@ -512,6 +514,94 @@ Both working options are kept in the deployment: **MMS-TTS as the simple, broad-
 
 ---
 
+## Part 4 — Live audio I/O and an interactive demo
+
+Parts 1–3 validated every capability using pre-recorded or generated audio files. This part moves to **live hardware**: a real USB microphone for input and a 3.5mm headset for output, connected directly to the Pi, with no file staging from another machine.
+
+### Step 19 — Audio hardware: what the Pi 4 actually supports
+
+```bash
+aplay -l   # list playback devices
+arecord -l # list capture devices
+```
+
+**Finding: the Raspberry Pi 4's built-in 3.5mm AV jack is output-only.** `arecord -l` reported zero capture devices before any USB microphone was connected — not a missing driver, but a hardware limitation of the board (the analog jack has no input circuitry; this changed on later Pi models with different jack designs, but not the 4). A connected headset's microphone side cannot be used via the AV jack regardless of software configuration.
+
+**Fix:** a USB "PnP" microphone, plugged into one of the Pi's USB ports. Class-compliant USB audio devices need no driver installation on Linux — `arecord -l` detected it immediately as a new ALSA card:
+
+```
+card 3: Device [USB PnP Sound Device], device 0: USB Audio [USB Audio]
+```
+
+Final working device assignment on this Pi (note: USB device card numbers are not guaranteed stable across reboots or different USB ports — verify with `arecord -l`/`aplay -l` after any hardware change):
+
+| | ALSA device |
+|---|---|
+| Microphone (USB) | `plughw:3,0` |
+| Speaker (headset, 3.5mm jack) | `plughw:2,0` |
+
+### Step 20 — Recording, and a real noise problem
+
+```bash
+arecord -D plughw:3,0 -f S16_LE -r 16000 -c 1 -d 4 out.wav
+```
+
+16kHz mono, matching the audio encoder's expected input format directly — no resampling step needed for this particular USB mic, unlike the macOS-generated test clips in Part 2 which needed an `ffmpeg` conversion.
+
+**Problem:** the first several recordings had audible electrical/hiss noise. Checked the mixer:
+
+```bash
+amixer -c 3
+# Mono: Capture 16 [100%] [23.81dB] [on]
+```
+
+The capture gain was at its maximum (100%, 23.81dB) — overdriving the mic input, which commonly produces exactly this kind of noise on inexpensive USB mics. Reduced it:
+
+```bash
+amixer -c 3 sset Mic 60%   # landed at 62% / 14.88dB
+```
+
+Noise cleared on the next recording and stayed clear across subsequent tests. **This gain setting does not persist across reboots by default** — `alsactl store` (or an equivalent startup script) would be needed to make it permanent for an unattended/portable deployment.
+
+### Step 21 — Full live voice-to-voice round trip
+
+With a working mic and speaker, ran the complete loop for the first time with no pre-recorded files involved at any stage:
+
+1. **Record** a live spoken question through the USB mic (`arecord`)
+2. **Understand + translate** via `llama-mtmd-cli` with an instruction prompt ("Translate what the speaker said into Luganda...")
+3. **Synthesize speech** from the model's text reply via Sunbird's VITS
+4. **Play** the result through the headset (`aplay`)
+
+Spoken English question → model heard and translated it → **"Oli otya leero?"** (correct Luganda) → synthesized and played back audibly through the headset, confirmed by ear. All four steps ran natively on the Pi, fully offline, no file ever leaving the device.
+
+This is the first point in the project where every stage — capture, understanding, translation, synthesis, playback — happened as a live, continuous interaction on the target hardware, rather than a test against a prepared artifact.
+
+### Step 22 — A unified demo script
+
+Driving each stage by hand over SSH does not scale to an actual demo. `sunflower_demo.py` wraps the whole pipeline in one menu-driven script, reusing the exact binaries and Python environments already proven in Parts 1–3 (no model code was rewritten — this is an orchestration layer, calling `llama-cli` / `llama-mtmd-cli` / the VITS and MMS-TTS inference paths as subprocesses).
+
+Four modes:
+
+1. **Text → Text** — interactive translate/chat loop, typed input
+2. **Speech → Text** — record via mic, print the model's text response
+3. **Speech → Speech** — the full round trip from Step 21, as a repeatable menu option
+4. **Text → Speech** — type text, choose a voice (Sunbird VITS for Luganda/English/Runyankole, or MMS-TTS by language code for anything else), hear it spoken
+
+Two implementation issues surfaced while building it, both informative about the underlying CLI tools' actual (vs. documented) behavior:
+
+- **`llama-cli`'s non-interactive flag is `--single-turn`, not `-no-cnv`** — the latter doesn't exist on this build and errors immediately. `--single-turn` combined with a predefined `-p` prompt runs one exchange and exits cleanly.
+- **`llama-cli` and `llama-mtmd-cli` split their output differently between stdout and stderr.** `llama-mtmd-cli` cleanly isolates the model's reply to stdout, with all logging/chat-template-example noise on stderr — trivial to parse. `llama-cli` prints its banner, ASCII art, and prompt echo to stdout as well, requiring the script to locate the line following the echoed `> <prompt>` and read until the trailing `[ Prompt: ... t/s ]` stats line. This was discovered by inspecting raw captured output rather than assumed from either tool's `--help` text, which doesn't document this split.
+
+A matching `.desktop` launcher (`~/Desktop/SunflowerDemo.desktop`) and wrapper shell script (`run_sunflower_demo.sh`) make the menu launchable from the Pi's graphical desktop, following the same pattern as a pre-existing custom launcher already present on this device (`AirQoAssistant.desktop`), rather than requiring an SSH session for every interaction.
+
+### Looking ahead: a dedicated handheld device
+
+Google's [`google-gemma/gemma-translator`](https://github.com/google-gemma/gemma-translator) project (Google Creative Labs) independently builds a similar speech-translator concept onto a small screen and speaker, as a 3D-printed handheld unit. It is a useful reference point but, on inspection, leaves most of the physical build undocumented: no specific display model or part number is named (only "a 480x320 kiosk-style display"), no battery/power design is described anywhere in the repo, and the three included STL enclosure files do not include a battery compartment. It targets a **Raspberry Pi 5** specifically, with no stated reason or benchmark comparison against a Pi 4, and uses a different runtime entirely (Google's LiteRT-LM rather than llama.cpp — see the [LiteRT-LM evaluation](#alternative-runtime-evaluated-litert-lm) below for why we did not adopt it).
+
+A small screen, dedicated speaker, and portable power supply are planned as the next physical iteration of this project, informed by what this reference project leaves unresolved rather than a ready template to copy.
+
+---
+
 ## Benchmarks
 
 All Pi numbers below were measured on the Raspberry Pi 4 Model B Rev 1.5 (8GB RAM, Cortex-A72 @ 1.5GHz, CPU-only, Debian 13/trixie) described in [Environment](#environment). Mac numbers are from the Apple M4 host used for development, included only as a sanity baseline — they are not representative of edge-device performance and should not be read as "the model is this fast," only "the conversion/quantization didn't break anything."
@@ -578,6 +668,78 @@ Internally, `llama-quantize` reported the per-tensor-weighted shift as **8828.84
 
 ---
 
+## Alternative runtime evaluated: LiteRT-LM
+
+Google's `gemma-translator` reference project (see [Part 4](#looking-ahead-a-dedicated-handheld-device)) uses **LiteRT-LM**, Google AI Edge's successor to TFLite for on-device LLM inference, rather than llama.cpp. Since we already had a working Sunbird checkpoint and were curious whether it would convert and run with this alternative toolchain — and whether it might perform better, particularly given the acquisition of a Raspberry Pi 5 for a future iteration — we attempted a side-by-side evaluation on the Mac (text-only, following the same validate-before-deploying discipline as the rest of this project).
+
+### Setup
+
+The conversion CLI is a separate tool from the runtime, both installed via `uv` (not plain `pip`):
+
+```bash
+uv tool install litert-torch-nightly  # conversion: HF checkpoint -> .litertlm
+uv tool install litert-lm             # runtime: run a .litertlm file
+```
+
+### Attempt 1: missing undocumented flag
+
+```bash
+litert-torch export_hf ~/ml/models/Sunflower-Gemma4-E2B ~/ml/litert-out --task=text_generation
+```
+
+Failed partway through export:
+
+```
+AssertionError: External embedder is required for Gemma4.
+```
+
+Not mentioned in the `--help` output's flag descriptions as Gemma4-specific, but present (and used, without explanation of why it's required) in Google's own tutorial example. Adding `--externalize_embedder` resolved it.
+
+### Attempt 2: conversion succeeds, chat template does not
+
+```bash
+litert-torch export_hf ~/ml/models/Sunflower-Gemma4-E2B ~/ml/litert-out \
+  --task=text_generation --externalize_embedder
+```
+
+This completed — roughly 20 minutes, with a detailed multi-stage log (load weights, export prefill/decode graphs, lower to MLIR, quantize, package). Produced `model.litertlm`, **5.07 GB**, using a `dynamic_wi8_afp32` (8-bit weights, fp32 activations) quantization recipe — reported in-process as "4.0x smaller" than the unquantized intermediate, though that comparison is against LiteRT-LM's own unquantized `.tflite` stage, not against our deployed GGUF baseline.
+
+Running it with a normal prompt failed:
+
+```
+litert-lm run ~/ml/litert-out/model.litertlm --prompt "Translate to Luganda: How are you today?"
+# E0000 ... Failed to apply template: unknown method: map has no method named get
+```
+
+Sunbird's `chat_template.jinja` is a large (~17KB), feature-rich Jinja2 template (nested macros, `dictsort`, tool-calling support) — the kind of template complexity common in modern instruction-tuned model releases. LiteRT-LM renders templates with **minijinja**, a lighter Rust-based Jinja subset, which does not support the full template's method calls. Bypassing the chat template entirely with `--no-template` (sending the raw prompt with no conversation formatting) did produce output: **"Oli bulungi?"** — a different, but also plausible, Luganda phrasing from our GGUF pipeline's consistent **"Oli otya leero?"** for the same request. Reproduced identically across two runs at different temperatures, so not simply sampling noise; the divergence is more likely attributable to the missing chat-template context, the different quantization scheme, or both — not root-caused further.
+
+### Attempt 3: the experimental fix, and a disk-space failure
+
+The converter exposes `--experimental_transpile_chat_template_for_minijinja` (default `False`), apparently intended to address exactly this gap. Re-running with it added:
+
+```bash
+litert-torch export_hf ~/ml/models/Sunflower-Gemma4-E2B ~/ml/litert-out-v2 \
+  --task=text_generation --externalize_embedder \
+  --experimental_transpile_chat_template_for_minijinja
+```
+
+This run **exhausted available disk space** before completing ("`ENOSPC: no space left on device`"). The conversion process holds substantial intermediate state simultaneously on disk: unquantized `model.tflite` (9.1 GB) and `per_layer_embedder.tflite` (9.4 GB) alongside their quantized counterparts and the original ~10GB source checkpoint — observed peak usage on the order of 35–40 GB, against a final packaged output of only ~5 GB. (A second, independent lesson here, unrelated to LiteRT-LM specifically: background model-conversion tasks can silently exhaust disk on a shared development machine faster than interactive use would suggest — worth checking `df -h` before any multi-gigabyte conversion, not just after one fails.)
+
+### Verdict: not adopted
+
+| | llama.cpp / GGUF (deployed) | LiteRT-LM |
+|---|---|---|
+| Final model size | **3.42 GB** | 5.07 GB (48% larger) |
+| Required undocumented flags to convert at all | No | Yes (`--externalize_embedder`) |
+| Chat template support | Works as-is | Broken; experimental fix crashed on disk space, unresolved |
+| Output for identical prompt | "Oli otya leero?" (consistent, used throughout this project) | "Oli bulungi?" (different, not root-caused) |
+| Conversion time | <1 minute (quantize step) | ~20 minutes |
+| Maturity signals | Stable, widely used, `--print-supported-models` confirms explicit Gemma4 support | Dated nightly build; several flags/behaviors marked "experimental"; required flag undocumented for this architecture |
+
+LiteRT-LM is real, actively developed, and did ultimately produce working (if imperfect) output on a genuinely custom third-party checkpoint — not nothing. But on every axis that matters for this deployment — size, reliability, speed to convert, and output consistency with the rest of the project — it currently underperforms the llama.cpp path already in production use. Not pursued further. Revisiting LiteRT-LM is reasonable once (a) the chat-template transpilation matures past "experimental," and (b) there is a specific reason to believe it meaningfully outperforms llama.cpp on the target hardware — e.g. once the Raspberry Pi 5 is available for direct comparison, since LiteRT-LM's binaries may be built assuming CPU features (such as those added in Cortex-A76) that the Pi 4 used throughout this project lacks.
+
+---
+
 ## Alternatives considered
 
 Two other release artifacts were evaluated before settling on the manual-quantization path:
@@ -594,12 +756,14 @@ See also [Part 3's alternatives](#step-15--orpheus-3b-tts-ruled-out-before-attem
 - **Benchmarks reported here are single-sample, not averaged.** Measured run-to-run variance was substantial (MMS-TTS inference time varied ~70% across three identical runs; see [Benchmarks](#text-to-speech-inference-raspberry-pi-4-cpu)). A rigorous benchmark would run each configuration 10+ times on an idle, thermally-stable device and report mean ± standard deviation.
 - The mmproj multimodal projector was only benchmarked at F16 — no quantized (Q4/Q8) mmproj was built or tested, so its ~1GB size and RAM footprint may be reducible.
 - The tokenizer config fix (Part 1, Step 5) and the `monotonic_align` import fix (Part 3, Step 17) were applied to local copies only; neither was upstreamed or reported to the respective maintainers.
-- No persistent serving layer (e.g. `llama-server` with an OpenAI-compatible HTTP API) has been set up yet — current usage is via interactive CLI tools over SSH.
-- Live microphone input and real-time speaker output (as opposed to file-based audio in/out) have not yet been tested — next planned step is a USB microphone (ALSA, likely via `arecord`) and Bluetooth speaker (via `bluetoothctl` pairing + PulseAudio/PipeWire routing). HDMI audio *output* has been confirmed working on the Pi (both MMS-TTS and Sunbird VITS output played back successfully via `aplay`).
-- Audio input quality was only tested with clear, single-speaker, English TTS-generated clips — not yet validated against real recorded speech in any of the 69 supported African languages, background noise, or multiple speakers.
+- No persistent serving layer (e.g. `llama-server` with an OpenAI-compatible HTTP API) has been set up yet — current usage is via interactive CLI tools over SSH, or the menu-driven `sunflower_demo.py` (Part 4) launched locally on the Pi.
+- Audio input quality was tested with clear, single-speaker, near-field USB mic recordings (both TTS-generated and live spoken) — not yet validated against background noise, multiple speakers, a lower-quality/distant mic, or real recorded speech in any of the 69 supported African languages beyond Luganda/English.
 - The three Sunbird VITS languages not yet tested (Acholi, Ateso, Lug+Eng bilingual) remain to be verified using the same process documented in Step 17.
 - TTS voice quality (Sunbird VITS vs. MMS-TTS) was judged subjectively by ear, not measured with any formal metric (e.g. MOS, PESQ) — worth doing properly for the paper.
+- The USB microphone's capture gain (Part 4, Step 20) was set manually via `amixer` and does not persist across reboots; a portable/unattended deployment would need `alsactl store` or an equivalent startup hook.
 - Offline operation: inference itself requires no network connectivity on either device. The one exception is MMS-TTS's first run, which downloads its checkpoint (~145MB) from the Hugging Face Hub via `transformers`' `from_pretrained`; it is cached locally afterward and all subsequent runs are fully offline. Sunbird's VITS and Gemma4-E2B checkpoints were downloaded once, manually, ahead of time, and never require network access thereafter.
+- A physical handheld form factor (display, dedicated speaker, battery power) is planned but not yet built — see [Part 4](#looking-ahead-a-dedicated-handheld-device).
+- The LiteRT-LM evaluation only tested text generation; the audio-encoder export path for this architecture is very new (merged upstream roughly a week before this evaluation) and was not attempted, given the text-only result was already not competitive with the deployed GGUF pipeline on size, reliability, or conversion time.
 
 ## References
 
@@ -611,3 +775,6 @@ See also [Part 3's alternatives](#step-15--orpheus-3b-tts-ruled-out-before-attem
 - SNAC codec (relevant to Orpheus): [github.com/hubertsiuzdak/snac](https://github.com/hubertsiuzdak/snac)
 - llama.cpp Orpheus/SNAC tracking issue: [#12476](https://github.com/ggml-org/llama.cpp/issues/12476), draft PR [#12487](https://github.com/ggml-org/llama.cpp/pull/12487)
 - Spark-TTS: [github.com/SparkAudio/Spark-TTS](https://github.com/SparkAudio/Spark-TTS)
+- Google gemma-translator reference project: [github.com/google-gemma/gemma-translator](https://github.com/google-gemma/gemma-translator)
+- LiteRT-LM runtime: [github.com/google-ai-edge/LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM)
+- LiteRT-Torch conversion tooling: [github.com/google-ai-edge/litert-torch](https://github.com/google-ai-edge/litert-torch) (formerly ai-edge-torch)
