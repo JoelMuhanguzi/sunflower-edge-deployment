@@ -20,6 +20,7 @@ This project ended up covering three connected pieces, each documented in its ow
 1. **[Part 1](#part-1--text-understanding-and-generation)** — deploying the text backbone (translation, chat)
 2. **[Part 2](#part-2--audio-input-speech-understanding)** — adding audio input (speech → text) via llama.cpp's multimodal projector
 3. **[Part 3](#part-3--text-to-speech-output)** — adding speech output (text → audio), after surveying Sunbird's wider model catalog and ruling out two other TTS approaches
+4. **[Benchmarks](#benchmarks)** — inference speed, load time, memory footprint, and quantization size comparisons, measured on the actual Pi hardware
 
 ## Why this path
 
@@ -511,6 +512,72 @@ Both working options are kept in the deployment: **MMS-TTS as the simple, broad-
 
 ---
 
+## Benchmarks
+
+All Pi numbers below were measured on the Raspberry Pi 4 Model B Rev 1.5 (8GB RAM, Cortex-A72 @ 1.5GHz, CPU-only, Debian 13/trixie) described in [Environment](#environment). Mac numbers are from the Apple M4 host used for development, included only as a sanity baseline — they are not representative of edge-device performance and should not be read as "the model is this fast," only "the conversion/quantization didn't break anything."
+
+Everything here is a single-sample measurement per configuration, not an average over many runs, except where noted (MMS-TTS). Edge-hardware benchmarks are noisy — see the variance note below — so treat single numbers as indicative, not precise.
+
+### Text generation (Gemma4-E2B, Q4_K_M)
+
+| | Mac (M4, Metal) | Raspberry Pi 4 (CPU) |
+|---|---|---|
+| Prompt processing | 68.5 tok/s | 6.0 tok/s |
+| Generation | 47.2 tok/s | 2.2–2.3 tok/s |
+| End-to-end (load + 64 tokens) | — (not isolated) | 19.4s |
+
+The Pi runs at roughly **9–20x slower** than the M4 depending on phase, consistent with the loss of GPU/Metal acceleration and the Cortex-A72's lack of the ARM dot-product/matmul-int8 extensions that help quantized inference on newer ARM cores (e.g. Cortex-A76 in the Pi 5).
+
+### Audio input (Gemma4-E2B + mmproj)
+
+| | Mac (M4, Metal) | Raspberry Pi 4 (CPU) |
+|---|---|---|
+| Audio batch encoding | ~190 ms | ~1475–1595 ms |
+| Full load (text model + mmproj) | — (not isolated) | ~2 min 14s (cold) |
+| Peak resident RAM (text + mmproj + audio encode) | — (not measured) | **~2.6 GB** (sampled live via `free -m` during inference; idle baseline was ~0.75 GB) |
+
+The ~2.6 GB peak is well under the earlier size-based estimate of ~4.5 GB in [Part 2](#part-2--audio-input-speech-understanding) — that estimate summed on-disk file sizes plus a flat overhead assumption, which overstated actual resident memory. The empirical number is the one to trust; it leaves roughly 5 GB of the Pi's 7.6 GB usable RAM free for a TTS process to run alongside in the same session.
+
+### Text-to-speech inference (Raspberry Pi 4, CPU)
+
+| Model | Language | Audio duration | Model load | Inference time | Real-time factor |
+|---|---|---|---|---|---|
+| Sunbird VITS | Luganda | 1.55s | 3.65s | 6.69s | 4.32x |
+| Sunbird VITS | English | 2.37s | 6.21s | 7.03s | 2.97x |
+| Sunbird VITS | Runyankole | 1.50s | 14.97s | 6.70s | 4.46x |
+| MMS-TTS (Meta) | Luganda (run 1) | 1.63s | 7.68s† | 5.40s‡ | 3.31x |
+| MMS-TTS (Meta) | Luganda (run 2) | 1.70s | 7.68s | 8.58s | 5.06x |
+| MMS-TTS (Meta) | Luganda (run 3) | 1.68s | 3.89s | 5.04s | 3.00x |
+
+† First measured run; ‡ this specific run also included the one-time Hub download, so its inference time is directly comparable across runs but its *load* time is not (download time is excluded from "load" above — see note below).
+
+**Real-time factor** = inference time ÷ audio duration. A factor of 1.0x would mean generation keeps pace with playback; everything measured here is **3–4.5x slower than real-time**, meaning a short sentence takes several seconds to synthesize after the text is ready — workable for a "type/speak, wait, hear the answer" interaction, not for live streaming synthesis.
+
+**Run-to-run variance is real and non-trivial**: MMS-TTS inference time ranged from 5.04s to 8.58s across three runs of the identical input on the same device with a warm model cache — a ~70% spread. Runyankole's VITS load time (14.97s) was more than double Luganda's and English's (~4–6s) despite a similarly-sized checkpoint, for reasons not yet diagnosed (possibly thermal throttling from back-to-back runs, or background system load — the Pi was not benchmarked in an isolated/idle state). **Treat all single-sample timings in this document as indicative of rough order of magnitude, not precise, reproducible figures** — a proper benchmark would run each configuration 10+ times and report mean ± standard deviation, which has not been done here.
+
+### Model size and quantization
+
+| Artifact | Size | Reduction vs. BF16 source |
+|---|---|---|
+| Original BF16 safetensors | 10.21 GB | — |
+| GGUF, F16 | 9.27 GB | 9.2% smaller |
+| GGUF, Q4_K_M (deployed) | **3.42 GB** | **66.5% smaller** (63.2% smaller than the F16 GGUF) |
+| mmproj, F16 (audio+vision) | 0.99 GB | — (not quantized; F16 only, no Q4 mmproj path attempted) |
+
+Internally, `llama-quantize` reported the per-tensor-weighted shift as **8828.84 MiB → 3242.78 MiB**, i.e. **16.00 bits/weight → 5.88 bits/weight** — close to but above the nominal "4-bit" the format is named for, because Q4_K_M keeps a subset of more sensitive tensors (e.g. `ffn_down`) at 6-bit precision rather than quantizing everything uniformly.
+
+**Not yet measured**: alternative quantization levels (`Q4_0`, `Q5_K_M`, `Q8_0`, `IQ2_XXS`, etc.) were not benchmarked against Q4_K_M for this model — Q4_K_M was chosen as llama.cpp's standard recommended default without a comparative sweep. A proper size-vs-quality-vs-speed table across quantization levels is flagged as follow-up work (see [Known limitations](#known-limitations--follow-ups)) and would strengthen any claims about this being an "optimal" quantization choice rather than a reasonable default.
+
+### TTS model size comparison
+
+| | Sunbird VITS | MMS-TTS (Meta) |
+|---|---|---|
+| Size per language | ~450 MB (generator only; discriminator `.pth` excluded, training-only) | ~145 MB |
+| Ratio | **3.1x larger** than MMS-TTS per language | — |
+| Languages tested | Luganda, English, Runyankole | Luganda, English |
+
+---
+
 ## Alternatives considered
 
 Two other release artifacts were evaluated before settling on the manual-quantization path:
@@ -522,13 +589,17 @@ See also [Part 3's alternatives](#step-15--orpheus-3b-tts-ruled-out-before-attem
 
 ## Known limitations / follow-ups
 
-- Generation speed (~2.3 tok/s text, ~3.3x real-time for TTS) is workable for short exchanges but slow for long-form content. Lighter quantizations (e.g. `Q4_0`, `Q3_K_M` for the text model) would trade quality for speed and have not yet been benchmarked.
+- Generation speed (~2.2–2.3 tok/s text, ~3–4.5x real-time for TTS) is workable for short exchanges but slow for long-form content.
+- **No quantization-level comparison sweep.** Only Q4_K_M was benchmarked for the text model. Alternative levels (`Q4_0`, `Q5_K_M`, `Q8_0`, `IQ2_XXS`, etc.) would trade size/speed/quality differently and have not been measured — see [Benchmarks](#model-size-and-quantization). This is the single highest-value follow-up for strengthening any "optimal quantization" claim in the paper.
+- **Benchmarks reported here are single-sample, not averaged.** Measured run-to-run variance was substantial (MMS-TTS inference time varied ~70% across three identical runs; see [Benchmarks](#text-to-speech-inference-raspberry-pi-4-cpu)). A rigorous benchmark would run each configuration 10+ times on an idle, thermally-stable device and report mean ± standard deviation.
+- The mmproj multimodal projector was only benchmarked at F16 — no quantized (Q4/Q8) mmproj was built or tested, so its ~1GB size and RAM footprint may be reducible.
 - The tokenizer config fix (Part 1, Step 5) and the `monotonic_align` import fix (Part 3, Step 17) were applied to local copies only; neither was upstreamed or reported to the respective maintainers.
 - No persistent serving layer (e.g. `llama-server` with an OpenAI-compatible HTTP API) has been set up yet — current usage is via interactive CLI tools over SSH.
-- Live microphone input and real-time speaker output (as opposed to file-based audio in/out) have not yet been tested — next planned step is a USB microphone (ALSA, likely via `arecord`) and Bluetooth speaker (via `bluetoothctl` pairing + PulseAudio/PipeWire routing).
+- Live microphone input and real-time speaker output (as opposed to file-based audio in/out) have not yet been tested — next planned step is a USB microphone (ALSA, likely via `arecord`) and Bluetooth speaker (via `bluetoothctl` pairing + PulseAudio/PipeWire routing). HDMI audio *output* has been confirmed working on the Pi (both MMS-TTS and Sunbird VITS output played back successfully via `aplay`).
 - Audio input quality was only tested with clear, single-speaker, English TTS-generated clips — not yet validated against real recorded speech in any of the 69 supported African languages, background noise, or multiple speakers.
 - The three Sunbird VITS languages not yet tested (Acholi, Ateso, Lug+Eng bilingual) remain to be verified using the same process documented in Step 17.
 - TTS voice quality (Sunbird VITS vs. MMS-TTS) was judged subjectively by ear, not measured with any formal metric (e.g. MOS, PESQ) — worth doing properly for the paper.
+- Offline operation: inference itself requires no network connectivity on either device. The one exception is MMS-TTS's first run, which downloads its checkpoint (~145MB) from the Hugging Face Hub via `transformers`' `from_pretrained`; it is cached locally afterward and all subsequent runs are fully offline. Sunbird's VITS and Gemma4-E2B checkpoints were downloaded once, manually, ahead of time, and never require network access thereafter.
 
 ## References
 
