@@ -1,0 +1,18 @@
+# Logos belong to Sunbird AI; fetch them with scripts/fetch_assets.sh
+scripts/assets/
+assets/
+
+# Model files and audio never belong in this repo
+*.gguf
+*.safetensors
+*.pth
+*.litertlm
+*.tflite
+*.wav
+*.aiff
+
+# Local backups and junk
+*.bak
+*.backup*
+__pycache__/
+.DS_Store

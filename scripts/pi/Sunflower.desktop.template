@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Sunflower
+Comment=Sunbird Sunflower speech translator
+Exec=python3 __HOME__/ml/sunflower_touch_ui.py
+Icon=__HOME__/ml/assets/sunflower-icon.png
+Terminal=false
+Categories=Utility;

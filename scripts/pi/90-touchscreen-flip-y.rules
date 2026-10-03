@@ -1,0 +1,9 @@
+# Flip the touchscreen's Y axis (libinput calibration matrix: y' = 1 - y).
+# Needed for the MHS-3.5" panel with the stock `piscreen` overlay, where taps
+# land mirrored top-to-bottom. Install, then REBOOT (the desktop reads the
+# calibration when it first detects the device at startup):
+#   sudo cp 90-touchscreen-flip-y.rules /etc/udev/rules.d/ && sudo reboot
+#
+# Matched by ID_PATH, not by /dev/input/eventN: the event number changes
+# between boots (it was event4 on one boot and event5 on the next).
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_PATH}=="platform-fe204000.spi-cs-1", ENV{LIBINPUT_CALIBRATION_MATRIX}="1 0 0 0 -1 1"
