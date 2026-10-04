@@ -119,11 +119,14 @@ def speak_text(text, lang_name, out_path):
         ], cwd=VITS_DIR)
         return result.returncode == 0
     else:
+        # Prefer a local copy (works offline); fall back to the Hugging Face hub.
+        local = f"{HOME}/ml/models/mms-tts-{lang['code']}"
+        ref = local if os.path.isdir(local) else f"facebook/mms-tts-{lang['code']}"
         script = f"""
 from transformers import VitsModel, AutoTokenizer
 import torch, scipy.io.wavfile
-model = VitsModel.from_pretrained("facebook/mms-tts-{lang['code']}")
-tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-{lang['code']}")
+model = VitsModel.from_pretrained({ref!r})
+tokenizer = AutoTokenizer.from_pretrained({ref!r})
 inputs = tokenizer({text!r}, return_tensors="pt")
 with torch.no_grad():
     output = model(**inputs).waveform

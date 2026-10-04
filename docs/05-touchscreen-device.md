@@ -64,7 +64,7 @@ This was the slow part. In order:
 
    After the reboot, a tap in the top-left corner logged `x=41, y=47`, as expected, and the user reported that taps matched much better than before.
 
-**What was and wasn't verified:** the top-left corner was checked explicitly; the other corners were judged from the spread of ~40 logged taps and from the user's report that the UI buttons now respond where they are tapped. We did not run a formal four-corner accuracy test.
+**What was and wasn't verified:** the top-left corner was checked explicitly; the other corners were judged from the spread of ~40 logged taps and from the user's report that the UI buttons now respond where they are tapped. We did not run a formal four-corner accuracy test. The same investigation was repeated on a rebuilt card with the same result ([rebuild](rebuild-from-scratch.md)).
 
 **Edge dead zone:** the logged touch range was roughly x 36–453 and y 31–299 on a 480×320 panel, so the outer ~20–35 px of each edge do not register. Keep important buttons away from the edges. (The quit button sits well inside the right edge for this reason.)
 
@@ -91,10 +91,11 @@ This was the slow part. In order:
 - **Worker threads must not touch Tk.** The first version read Tk variables from the worker thread, which Tk only permits on the main thread (it happened to work, but is fragile). Values are now read on the main thread and passed in, and all screen updates go through `root.after`. A stubbed test (fake microphone, models and speaker, driven through a real main loop) verified the Translate, Transcribe and same-language flows.
 - **Brand elements.** Colours (`#ffaa28` orange, the most frequent colour in sunbird.ai's page source) and logos in the title bar. The record button is labelled "TAP TO SPEAK" because it records a fixed 5 seconds after one tap; it does not respond to holding.
 - **Desktop preview.** `scripts/preview_ui.py` shows the real UI at 480×320 on a desktop machine, so layout changes can be checked before copying to the Pi. Only the visuals work off-device; recording and models need the Pi.
+- **Offline voices.** Swahili and Acholi speech use Meta's MMS-TTS. The app loads each from a local folder (`~/ml/models/mms-tts-<code>`) when it exists and only downloads otherwise, so these voices work with no network ([Part 3](03-text-to-speech.md)).
 
 ## Step 26 — Launching from the desktop
 
-`scripts/pi/Sunflower.desktop` is a desktop launcher. On first use, double-clicking it showed a dialog: *Execute / Execute in terminal / Open / Cancel*. That dialog is the file manager's `quick_exec=0` setting ("ask how to run executables"), not a fault in the launcher.
+`scripts/pi/install_launcher.sh` creates the desktop launcher (from `Sunflower.desktop.template`, filling in the home directory). On first use, double-clicking it showed a dialog: *Execute / Execute in terminal / Open / Cancel*. That dialog is the file manager's `quick_exec=0` setting ("ask how to run executables"), not a fault in the launcher.
 
 It can be switched off in **File Manager → Edit → Preferences → General → "Don't ask options on launch of executable file"**. To do it over SSH, the catch is that `pcmanfm` holds the setting in memory and rewrites `~/.config/libfm/libfm.conf`. On Raspberry Pi OS it is run by a supervisor (`lwrespawn`) that restarts it one second after it exits, so the setting can be changed in that gap:
 

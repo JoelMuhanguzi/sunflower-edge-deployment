@@ -151,6 +151,8 @@ Tested on both Mac (Luganda and English) and Pi (Luganda) — all produced corre
 
 **Pi performance:** generating 1.63s of Luganda audio took **5.40s of inference time** (~3.3x slower than real-time) on the Pi 4's CPU, including first-run model download. Confirmed working via direct HDMI audio playback (`aplay -D plughw:0,0`) on the Pi itself, not just file inspection.
 
+**Offline copies of the MMS voices.** `from_pretrained("facebook/mms-tts-<code>")` downloads the model on first use, which would break the offline claim for a voice that was never run before. The apps therefore look for a local folder first, `~/ml/models/mms-tts-<code>` (containing `config.json`, `model.safetensors`, `tokenizer_config.json`, `special_tokens_map.json`, `vocab.json`), and only fall back to the Hub if it is missing. On a rebuilt Pi, all five voices (Swahili, Acholi, Luganda, English, Runyankole) loaded and generated speech from those folders with `HF_HUB_OFFLINE=1`. The folders are plain files, not a Hugging Face cache, because the cache's symbolic links cannot be stored on a FAT32 drive; the duplicate `pytorch_model.bin` was left out since `transformers` loads the `.safetensors` file first.
+
 ### TTS comparison summary
 
 | Approach | Status | Size (per language) | Pi dependencies | Quality (subjective) |

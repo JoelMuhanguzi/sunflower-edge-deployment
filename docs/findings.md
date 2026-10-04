@@ -38,4 +38,16 @@ The non-obvious things we learned deploying an African-language speech model to 
 
 ## Measurement caveats
 
-18. **Edge timings are noisy.** Identical MMS-TTS runs varied by about 70% (5.0–8.6 s). Treat single numbers as order-of-magnitude ([Benchmarks](benchmarks.md)).
+18. **Edge timings are noisy.** Identical MMS-TTS runs varied by about 70% (5.0–8.6 s). Treat single numbers as order-of-magnitude ([Benchmarks](benchmarks.md)). Controlled `llama-bench` runs of the language model were far steadier (±0.01–0.02 tokens/s over 3 repeats), so the large TTS spread may reflect uncontrolled conditions, but we did not test that.
+
+## Quantization
+
+19. **The default turned out to be the right level.** Across eight levels on 200 English→Luganda sentences, Q4_K_M showed no detectable quality loss against the unquantized model (95% interval for the chrF difference: −1.5 to +0.8) and had no broken outputs. Q3_K_M was clearly worse (−4.3), and Q2_K collapsed (chrF 28.6; 51 of 200 outputs were empty or leaked control tokens like `<|turn>`) ([Quantization comparison](quantization-sweep.md)).
+20. **More precision cost speed and bought nothing measurable.** On the Pi, Q5_K_M and Q6_K generated about 20% slower than Q4_K_M, and Q8_0 about 40% slower, with quality indistinguishable from Q4_K_M ([Quantization comparison](quantization-sweep.md#speed-and-memory-on-the-raspberry-pi-4)). The sizes also bunch together: "2-bit" Q2_K is only 13% smaller than Q4_K_M.
+
+## Moving files and rebuilding
+
+21. **File sizes do not catch damaged copies; checksums do.** Three model files crossed a USB flash drive with exactly the right size and wrong contents (a 1 GB audio encoder, a 145 MB voice model and a 1.9 GB piece of a split model). The same drive's own copy differed from the original, so the damage happened when writing to it. A different drive delivered the same file correctly. Over home Wi-Fi a 1 GB file took 11 seconds with `rsync --checksum` ([rebuild](rebuild-from-scratch.md#files-damaged-in-transit)).
+22. **A rebuild on a blank card reproduced the results.** Text, audio input, speech output and touch behaved as on the first card (generation 2.4 vs 2.3 tokens/s, encoder 1.45 vs 1.48 s). The differences were setup details: `sudo` asked for a password, Imager's "password" SSH option installs no key, and the USB microphone defaulted to 100% gain again ([rebuild](rebuild-from-scratch.md)).
+23. **Ship offline voices as plain folders.** The Hugging Face cache layout relies on symbolic links, which a FAT32 drive cannot hold, and a first-run download breaks an "offline" claim. The apps now prefer `~/ml/models/mms-tts-<code>`; Swahili and Acholi were tested offline on the rebuilt Pi ([Part 3](03-text-to-speech.md)).
+24. **A flash drive that mounts with *"Volume was not properly unmounted"* is a warning worth heeding.** The Pi's log said this about the drive that later proved to have damaged files; eject through Finder before unplugging, and verify anyway.

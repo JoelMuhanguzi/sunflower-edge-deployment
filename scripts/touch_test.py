@@ -15,7 +15,7 @@ canvas.pack(fill="both", expand=True)
 
 info = tk.Label(root, text="Tap or click anywhere", fg="white", bg="black",
                  font=("DejaVu Sans", 14))
-info.place(x=10, y=10)
+info.place(relx=0.5, rely=0.33, anchor="center")  # middle, clear of the corner taps
 
 counter = [0]
 
@@ -39,6 +39,6 @@ canvas.bind("<Button-1>", on_press)
 root.bind("<Escape>", quit_app)
 
 exit_btn = tk.Button(root, text="X Quit", command=quit_app, bg="#333", fg="white")
-exit_btn.place(relx=0.5, rely=0.5, anchor="center", width=90, height=40)
+exit_btn.place(relx=0.5, rely=0.62, anchor="center", width=90, height=40)
 
 root.mainloop()

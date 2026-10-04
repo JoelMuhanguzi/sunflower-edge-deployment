@@ -17,6 +17,8 @@ Everything here is a single-sample measurement per configuration, not an average
 
 The Pi runs at roughly **9–20x slower** than the M4 depending on phase, consistent with the loss of GPU/Metal acceleration and the Cortex-A72's lack of the ARM dot-product/matmul-int8 extensions that help quantized inference on newer ARM cores (e.g. Cortex-A76 in the Pi 5).
 
+On the rebuilt Pi (newer llama.cpp build), a 3-repetition `llama-bench` of Q4_K_M gave **5.99 ± 0.02 prompt and 2.45 ± 0.01 generation tokens/s**, slightly better than the single-run figures above. See the [quantization comparison](quantization-sweep.md#speed-and-memory-on-the-raspberry-pi-4) for the same measurement across five levels.
+
 ### Audio input (Gemma4-E2B + mmproj)
 
 | | Mac (M4, Metal) | Raspberry Pi 4 (CPU) |
@@ -26,6 +28,8 @@ The Pi runs at roughly **9–20x slower** than the M4 depending on phase, consis
 | Peak resident RAM (text + mmproj + audio encode) | — (not measured) | **~2.6 GB** (sampled live via `free -m` during inference; idle baseline was ~0.75 GB) |
 
 The ~2.6 GB peak is well under the earlier size-based estimate of ~4.5 GB in [Part 2](02-audio-input.md) — that estimate summed on-disk file sizes plus a flat overhead assumption, which overstated actual resident memory. The empirical number is the one to trust; it leaves roughly 5 GB of the Pi's 7.6 GB usable RAM free for a TTS process to run alongside in the same session.
+
+**Two different memory measures appear in these docs.** The ~2.6 GB above is system memory *in use* (`free -m`), which excludes cached file pages. The [quantization comparison](quantization-sweep.md) reports the model process's *peak resident memory*, which includes the memory-mapped model file (3.47 GB for Q4_K_M text-only). Both are valid; they are not interchangeable.
 
 ### Text-to-speech inference (Raspberry Pi 4, CPU)
 
@@ -55,7 +59,7 @@ The ~2.6 GB peak is well under the earlier size-based estimate of ~4.5 GB in [Pa
 
 Internally, `llama-quantize` reported the per-tensor-weighted shift as **8828.84 MiB → 3242.78 MiB**, i.e. **16.00 bits/weight → 5.88 bits/weight** — close to but above the nominal "4-bit" the format is named for, because Q4_K_M keeps a subset of more sensitive tensors (e.g. `ffn_down`) at 6-bit precision rather than quantizing everything uniformly.
 
-**Not yet measured**: alternative quantization levels (`Q4_0`, `Q5_K_M`, `Q8_0`, `IQ2_XXS`, etc.) were not benchmarked against Q4_K_M for this model — Q4_K_M was chosen as llama.cpp's standard recommended default without a comparative sweep. A proper size-vs-quality-vs-speed table across quantization levels is flagged as follow-up work (see [Known limitations](limitations.md#known-limitations--follow-ups)) and would strengthen any claims about this being an "optimal" quantization choice rather than a reasonable default.
+**Other quantization levels** were compared in a separate [quantization comparison](quantization-sweep.md): eight levels for translation quality (on a Mac) and five for Pi speed and memory. Q4_K_M, the level deployed here, held up best overall. Not yet covered: the IQ-series formats, quantizing the audio encoder, other languages, and speech transcription under quantization.
 
 ### TTS model size comparison
 
