@@ -24,7 +24,7 @@ Text generation measured **6.1 prompt / 2.4 generation tokens/s** (first-install
 - **Choosing "password" for SSH in Raspberry Pi Imager meant no key was installed.** Authentication was fixed with `ssh-copy-id`, then password login was switched off (`PasswordAuthentication no` in a `sshd_config.d` file named so it sorts before the cloud-init one, because the first matching value wins).
 - **The old SSH host key no longer matched.** A reflashed Pi on the same IP has new host keys, so the stored entry had to be replaced. Do this only when you know you reflashed.
 - **A weak default password** was chosen at first; changing it was part of the setup.
-- **The USB microphone's gain defaults to 100% again** (the noisy setting). It was set to ~62% and saved with `alsactl store`. We expect that to survive a reboot but have **not yet verified** that.
+- **The USB microphone's gain defaults to 100% again** (the noisy setting). It was set to ~62% and saved with `alsactl store`, but **that did not survive a reboot**: the gain read 100% again afterwards (the `alsa-restore` service was active). The touchscreen app therefore sets the gain to 62% with `amixer` before every recording (`MIC_GAIN_PERCENT` in `sunflower_touch_ui.py`); this was tested by forcing 100% and recording through the app's own code. The terminal demo does the same.
 
 ## Files damaged in transit
 

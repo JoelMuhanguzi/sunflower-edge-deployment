@@ -119,8 +119,9 @@ if want mic; then
   say "microphone gain (USB mic defaults to 100%, which was noisy)"
   CARD=$(arecord -l 2>/dev/null | sed -n 's/^card \([0-9]*\):.*USB.*/\1/p' | head -1)
   if [ -n "$CARD" ]; then
-    amixer -c "$CARD" sset Mic 60% | grep 'Mono:' || true
+    amixer -c "$CARD" sset Mic 62% | grep 'Mono:' || true
     sudo alsactl store
+    echo "note: this does not survive a reboot; the apps set 62% themselves before each recording"
     echo "USB mic is card $CARD; the apps expect plughw:3,0 for the mic and plughw:2,0 for the headphones"
   else
     echo "no USB capture device found; plug the microphone in and re-run: STEPS=mic sh $0"

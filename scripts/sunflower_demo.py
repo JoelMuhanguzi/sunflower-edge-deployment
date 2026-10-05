@@ -23,6 +23,7 @@ TTS_VENV_PY = f"{HOME}/ml/tts-venv/bin/python"
 MIC_DEVICE = "plughw:3,0"
 SPEAKER_DEVICE = "plughw:2,0"
 RECORD_SECONDS = 5
+MIC_GAIN_PERCENT = 62
 
 VITS_LANGUAGES = {
     "1": ("Luganda", f"{HOME}/ml/models/tts-vits-lug"),
@@ -45,6 +46,9 @@ def run(cmd, **kwargs):
 
 
 def record_audio(out_path, seconds=RECORD_SECONDS):
+    # The USB mic reverts to 100% gain (noisy) after a reboot, so set it each time.
+    card = MIC_DEVICE.split(":")[1].split(",")[0]
+    run(["amixer", "-c", card, "sset", "Mic", f"{MIC_GAIN_PERCENT}%"])
     print(f"\nRecording in...")
     for n in (3, 2, 1):
         print(n)

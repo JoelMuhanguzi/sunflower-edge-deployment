@@ -24,6 +24,7 @@ TTS_VENV_PY = f"{HOME}/ml/tts-venv/bin/python"
 MIC_DEVICE = "plughw:3,0"
 SPEAKER_DEVICE = "plughw:2,0"
 RECORD_SECONDS = 5
+MIC_GAIN_PERCENT = 62
 
 SCRATCH = f"{HOME}/ml/demo_scratch"
 os.makedirs(SCRATCH, exist_ok=True)
@@ -44,6 +45,10 @@ def run(cmd, **kwargs):
 
 
 def record_audio(out_path, seconds=RECORD_SECONDS):
+    # The USB mic reverts to 100% gain (noisy) after a reboot even with
+    # `alsactl store`, so set it before every recording.
+    card = MIC_DEVICE.split(":")[1].split(",")[0]
+    run(["amixer", "-c", card, "sset", "Mic", f"{MIC_GAIN_PERCENT}%"])
     result = run([
         "arecord", "-D", MIC_DEVICE, "-f", "S16_LE",
         "-r", "16000", "-c", "1", "-d", str(seconds), out_path,
