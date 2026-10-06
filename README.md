@@ -1,4 +1,4 @@
-# Sunflower on a Raspberry Pi: offline speech translation for African languages
+# Sunflower at the edge: offline speech translation for African languages on small boards
 
 A working prototype that translates speech between English and African languages **entirely on a Raspberry Pi 4**: speak into a microphone, see what it heard, get a translation, and hear it spoken back. After the one-off setup it needs no internet connection.
 
