@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Sunflower Fast
+Comment=Sunflower speech translator, Whisper + NLLB pipeline
+Exec=__HOME__/ml/pipeline2/venv/bin/python __HOME__/ml/sunflower_fast_ui.py
+Icon=__HOME__/ml/assets/sunflower-icon.png
+Terminal=false
+Categories=Utility;

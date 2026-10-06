@@ -50,6 +50,7 @@ The model card's own evaluation (full-precision weights; not re-measured for our
 | [Part 3: text-to-speech](docs/03-text-to-speech.md) | Three TTS approaches tried; two kept (Steps 14–18) |
 | [Part 4: live audio and demo](docs/04-live-audio-demo.md) | Real mic and headset, terminal demo (Steps 19–22) |
 | [Part 5: touchscreen device](docs/05-touchscreen-device.md) | Display, touch fix, UI, launcher (Steps 23–26) |
+| [Part 6: a second, faster pipeline](docs/06-fast-pipeline.md) | Whisper + NLLB int8 instead of Gemma for listening and translating, kept loaded in memory; measurements on Pi 4, Orange Pi and Mac (preliminary) |
 | [Benchmarks](docs/benchmarks.md) | Timing, memory, size |
 | [Quantization comparison](docs/quantization-sweep.md) | Eight levels: size, translation quality, Pi speed and memory |
 | [Rebuilding from scratch](docs/rebuild-from-scratch.md) | A blank-card rebuild: what was identical, what differed, damaged files |
@@ -79,6 +80,7 @@ scripts/
   touch_test.py             draws a marker where each touch lands (for calibration)
   preview_ui.py             desktop preview of the touchscreen UI
   fetch_assets.sh           downloads the logos (not stored here)
+  fast/                     second pipeline: Whisper + NLLB app, voice worker, experiments (Part 6)
   setup-pi.sh               rebuild a Pi: packages, llama.cpp, Python envs, VITS, display, touch, launcher, mic
   pi/                       udev touch rule, launcher installer, VITS import fix (patch_monotonic_align.py)
   quant-sweep/              make/evaluate/score the quantization levels; Pi speed benchmark
