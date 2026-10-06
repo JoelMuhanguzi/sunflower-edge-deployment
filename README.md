@@ -1,10 +1,15 @@
 # Sunflower on a Raspberry Pi: offline speech translation for African languages
 
-A working prototype that runs [Sunbird AI's Sunflower-Gemma4-E2B](https://huggingface.co/Sunbird/Sunflower-Gemma4-E2B), a Gemma 4–based model for 69 African languages, **entirely on a Raspberry Pi 4**: speak into a microphone, see what it heard, get a translation, and hear it spoken back. After the one-off setup it needs no internet connection.
+A working prototype that translates speech between English and African languages **entirely on a Raspberry Pi 4**: speak into a microphone, see what it heard, get a translation, and hear it spoken back. After the one-off setup it needs no internet connection.
 
-This repository is a reproducible **log of how that was done**, including the dead ends. The model's repository ships only a 10 GB full-precision checkpoint, so most of the work was quantizing it, adding audio input and speech output, and making it usable on a small touchscreen.
+Two pipelines were built and compared on the same device:
 
-> **Status: working prototype, not a product.** Speech accuracy varies a lot by language (see [what to expect](#what-to-expect)), the touch calibration is only partly verified, and the device has no battery or enclosure yet.
+- **The first app, "Sunflower"** uses one model, [Sunbird AI's Sunflower-Gemma4-E2B](https://huggingface.co/Sunbird/Sunflower-Gemma4-E2B) (a Gemma 4–based model for 69 African languages), for both listening and translating (Parts 1–5).
+- **The second app, "Sunflower Fast"** swaps that for Sunbird's smaller specialist models, a Whisper-based speech recogniser and an NLLB translator, kept loaded in memory. On the Pi 4 it took **a median 41 s per spoken round trip against 122 s** for the first app as originally built (Part 6).
+
+This repository is a reproducible **log of how that was done**, including the dead ends. The Gemma repository ships only a 10 GB full-precision checkpoint, so much of the work was quantizing it, adding audio input and speech output, and making it usable on a small touchscreen. Part 6 then asked whether the specialist models do better and measured both pipelines on the same recordings.
+
+> **Status: working prototype, not a product.** Speech accuracy varies a lot by language (see [what to expect](#what-to-expect)); the accuracy comparison between pipelines rests on six recordings of one speaker; the touch calibration is only partly verified; and the device has no battery or enclosure yet.
 
 ## What it does
 
@@ -16,30 +21,45 @@ This repository is a reproducible **log of how that was done**, including the de
 | Choose **Transcribe** | Shows the transcript only |
 
 ```
- USB mic ──► record 5 s ──► Gemma4-E2B + audio encoder ──► transcript
-                                                              │
-                              (Translate mode only)           ▼
- headset ◄── speak ◄── VITS / MMS-TTS ◄── translation ◄── Gemma4-E2B (text)
+ First app (Sunflower)
+   USB mic ─► record 5 s ─► Gemma4-E2B + audio encoder ─► transcript ─► Gemma4-E2B (text) ─► translation ─┐
+ Second app (Sunflower Fast)                                                                              │
+   USB mic ─► record 5 s ─► Whisper large-v3 int8 ─────► transcript ─► NLLB-1.3B int8 ────► translation ─┤
+                                                                                                          ▼
+                                                     headset ◄─ speak ◄─ Sunbird VITS / Meta MMS-TTS ◄───┘
 ```
 
 ## Results at a glance
 
-Measured on a Raspberry Pi 4 Model B (8 GB), CPU only. Mostly **single runs** on a busy device, so read them as orders of magnitude ([why](docs/benchmarks.md)).
+Measured on a Raspberry Pi 4 Model B (8 GB), CPU only, with heatsinks and fans. The headline comparison uses **six 5-second recordings of one speaker** (three English, three Luganda) put through each setup in the same way, with the CPU cooled before each run; figures are medians in seconds ([method and raw results](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips)).
+
+| Setup | Listen | Translate | Voice | **Spoken round trip** | Start-up |
+|---|---|---|---|---|---|
+| First app as originally built (Gemma started afresh on every tap) | 78.8 | 21.3 | 24.1 | **121.6 s** | none |
+| First app now (Gemma and two voices kept loaded) | 43.6 | 12.4 | 9.6 | **65.1 s** | 1–2 min |
+| **Second app** (Whisper + NLLB int8, kept loaded) | **19.3** | **10.7** | **9.9** | **40.8 s** | about 100 s |
+
+The second app is about **3× faster** than the first as built and 1.6× faster than Gemma kept loaded. Word error rates on these clips were comparable (0.09, 0.09 and 0.06), but that is one speaker and six sentences, so read it as "not obviously worse", not as a ranking. The middle row is the benchmark's setup with Gemma kept loaded; the changed app itself took 61–71 s on three of the clips.
+
+**What produced the speed-up**
+- **Loading models once** took the same Gemma model from 122 s to 65 s per round trip (at the cost of about 4.3 GB held in memory and a 1–2 minute start-up).
+- **Smaller specialist models** took it from 65 s to 41 s: Whisper int8 (1.56 GB) and NLLB int8 (1.38 GB) against Gemma Q4_K_M plus its audio encoder (4.41 GB).
+- **Converting Whisper to int8 on the Mac** cut its load on the Pi from 82 s to 2.8 s, and **shortening its 30-second window** cut transcription of a short clip from about 70 s to about 14 s (a median of 19 s over the recorded clips with the final 6 s window). A window exactly as long as the recording made Whisper repeat sentences (one run looped for 300 s), so the app uses 6 s plus a token cap and a repeat guard.
 
 | | |
 |---|---|
-| Model size | 10.21 GB original → **3.42 GB** (Q4_K_M, 66.5% smaller) + 0.99 GB audio encoder |
-| Quantization level | Q4_K_M compared with seven other levels: **no detectable translation-quality loss** against the unquantized model and no broken outputs; higher levels were 20–40% slower on the Pi ([details](docs/quantization-sweep.md)) |
-| Text generation (Q4_K_M) | ~2.45 tokens/s generation, ~6.0 prompt (3-repetition benchmark, ±0.02) |
-| Memory during audio + text inference | system memory in use peaked at ~2.6 GB of 7.6 GB, excluding cached file pages (≈0.75 GB of that is idle baseline); the text model process's peak resident memory, including its mapped file, is ~3.5 GB |
-| Speech → transcript | **~78 s** for a 5 s recording in the original version, which started Gemma afresh on every tap (median of five runs; an earlier ~30 s came from a clip about a second long). **~44 s** now that the app keeps Gemma loaded |
-| Transcript → translation | ~21 s originally (median of six runs), **~12 s** with Gemma kept loaded |
-| Whole spoken round trip | **~2 min** originally (median 121 s over six clips), **~65 s** now (first app, models kept loaded; start-up 1–2 min), **~41 s** with the second app, Sunflower Fast, which uses Whisper + NLLB ([Part 6](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips)) |
-| Speech synthesis | ~3–4.5× slower than real time |
+| Gemma size | 10.21 GB original → **3.42 GB** (Q4_K_M, 66.5% smaller) + 0.99 GB audio encoder |
+| Gemma quantization level | Q4_K_M compared with seven other levels: **no detectable translation-quality loss** against the unquantized model and no broken outputs; higher levels were 20–40% slower on the Pi ([details](docs/quantization-sweep.md)) |
+| Gemma generation speed | ~2.45 tokens/s generation, ~6.0 prompt (3-repetition benchmark, ±0.02); unchanged by keeping it loaded. Whisper and NLLB stage rates (about 0.7 and 1.0 tokens/s end to end) include their encoders and are not comparable |
+| Memory | First app with Gemma kept loaded: ~4.3 GB resident in the server. Second app: 3.9 GB in use with Whisper and NLLB, ~4.6 GB after a run with the voices. Original per-tap Gemma run: ~2.6 GB peak in use. The two apps cannot be open together |
+| Speech synthesis | ~3–5× slower than real time; not changed between the apps. A background worker saves the per-tap load (about 10 s), not the synthesis |
+| A 4 GB board | On an Orange Pi Zero 2W, Whisper int8 took ~24 s per clip and NLLB 9–20 s per sentence, with throttling; Gemma plus its audio encoder cannot fit |
+
+Mostly small samples on a device that throttles under sustained load (the CPU reached 72–79 °C), so read the figures as the right order of magnitude; the earlier single-run figures are in [Benchmarks](docs/benchmarks.md). An earlier claim of "about 30 s to listen" came from a clip about a second long and has been corrected: with 5 s recordings the original first app took about 78 s.
 
 ### What to expect
 
-The model card's own evaluation (full-precision weights; not re-measured for our 4-bit version) gives word error rates of **0.15 for English, 0.16 for Swahili, about 0.50 for Luganda and Runyankole**. Expect usable transcripts in the first two and noticeable errors in the others, which carry into the translation. Details and per-language figures: [docs/02-audio-input.md](docs/02-audio-input.md#which-languages-does-audio-input-cover).
+The Gemma model card's own evaluation (full-precision weights; not re-measured for our 4-bit version) gives word error rates of **0.15 for English, 0.16 for Swahili, about 0.50 for Luganda and Runyankole**. On our six clips both pipelines transcribed English exactly and Luganda with word error rates between 0.00 and 0.40 per sentence, better than the model card's corpus-level figure suggests, but six hand-picked short sentences are not comparable with a corpus. Expect noticeable errors in Luganda and Runyankole, which carry into the translation. The second app's translation model does not cover Swahili. Details and per-language figures: [docs/02-audio-input.md](docs/02-audio-input.md#which-languages-does-audio-input-cover).
 
 ## Read this next
 
