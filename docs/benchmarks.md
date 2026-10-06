@@ -5,7 +5,61 @@
 
 All Pi numbers below were measured on the Raspberry Pi 4 Model B Rev 1.5 (8GB RAM, Cortex-A72 @ 1.5GHz, CPU-only, Debian 13/trixie) described in [Environment](01-text-model.md#environment). Mac numbers are from the Apple M4 host used for development, included only as a sanity baseline — they are not representative of edge-device performance and should not be read as "the model is this fast," only "the conversion/quantization didn't break anything."
 
-Everything here is a single-sample measurement per configuration, not an average over many runs, except where noted (MMS-TTS). Edge-hardware benchmarks are noisy — see the variance note below — so treat single numbers as indicative, not precise.
+Apart from the [pipeline comparison](#comparing-the-two-pipelines-part-6) just below (medians of six runs per setup), everything here is a single-sample measurement per configuration, not an average over many runs, except where noted (MMS-TTS). Edge-hardware benchmarks are noisy — see the variance note below — so treat single numbers as indicative, not precise.
+
+### Comparing the two pipelines (Part 6)
+
+Full method, caveats and raw data: [Part 6](06-fast-pipeline.md) and `results/pi4-headtohead-2026-10-06/`. The first pipeline (Gemma for listening and translating) is compared with the second (Whisper for listening, NLLB for translating) on the Pi 4, with the same six recorded 5 s clips (three English, three Luganda; one speaker) and identical stage timing. Medians in seconds; the CPU was cooled below 60 °C before each setup.
+
+**Spoken round trip on the Pi 4**
+
+| Setup | Listen | Translate | Voice | **Total** | Slowest run | Start-up | Word error rate | Clips with repeats |
+|---|---|---|---|---|---|---|---|---|
+| A: first app as originally built (Gemma started per tap) | 78.8 | 21.3 | 24.1 | **121.6** | 200.5 (cold first call) | none | 0.09 | 0 of 6 |
+| B: Gemma kept loaded in `llama-server`, voices preloaded (what the first app now does) | 43.6 | 12.4 | 9.6 | **65.1** | 70.8 | 56 s | 0.09 | 0 of 6 |
+| C-5s: second app, 5 s window | 27.0 | 15.0 | 13.5 | 56.2 | 335.7 (a 299 s loop) | 96 s | 1.03 | 3 of 6 |
+| C-tuned: second app, 6 s window + decoding options | 19.8 | 11.6 | 10.1 | 42.6 | 45.2 | 107 s | 0.23 | 1 of 6 |
+| **C-final: second app as shipped** | **19.3** | **10.7** | **9.9** | **40.8** | 43.5 | 102 s | **0.06** | 0 of 6 |
+
+The first app after the change took 61–71 s on three of the clips in a headless run (start-up 111 s for Gemma and 26 s for the voices from a cold cache).
+
+**Models and memory**
+
+| | First pipeline | Second pipeline |
+|---|---|---|
+| Listening and translating models on disk | Gemma4-E2B Q4_K_M 3.42 GB + audio encoder 0.99 GB = **4.41 GB** | Whisper int8 1.56 GB + NLLB int8 1.38 GB = **2.94 GB** |
+| Voices (same in both) | Sunbird VITS English 145 MB, Luganda 450 MB, Runyankole ~450 MB; MMS-TTS 139 MB each | same |
+| Memory in use, kept loaded | ~4.3 GB resident in the server (includes the mapped model file) | 3.9 GB with Whisper and NLLB; 4.6 GB after a run with the voices |
+| Generation speed | 2.40–2.47 tokens/s (setups A and B; `llama-bench`: 2.45) | not comparable: Whisper 0.7 and NLLB 1.0 tokens/s end to end including encoder and beam search |
+| Languages | Sunflower's 69 | transcription as Gemma's; translation limited to eng, ach, lgg, lug, nyn, teo (**no Swahili**) |
+
+**Whisper int8, English clip of 1.1 s (single runs)**
+
+| | Mac | Pi 4 | Orange Pi Zero 2W (4 GB) |
+|---|---|---|---|
+| Model load | 0.4 s | **2.8 s** (82 s when quantized on the fly from float16) | 53 s |
+| 30 s window (stock) | 5.8 s | 66–72 s | 149–151 s |
+| 5 s window | 1.0 s | 13.9–14.1 s | 24.3–24.5 s |
+
+**NLLB int8 translation, English to Luganda (single runs)**
+
+| | Mac | Pi 4 | Orange Pi |
+|---|---|---|---|
+| Load | 0.8 s | 39 s | 21–43 s |
+| Per sentence (beam 5) | 0.4–0.6 s | 5.7–12.7 s | 9.2–19.5 s |
+| For comparison: Gemma translating the same sentences, kept loaded | – | 7.6–11.0 s | – |
+
+**Voice on the Pi 4, one Luganda sentence of 9 words**
+
+| Path | Time |
+|---|---|
+| New process per tap (standalone) | 31.3 s (load 3.9 + synthesis 21.5 + about 6 s start-up) |
+| New process per tap (inside the app) | 53.3 s (not reproduced standalone) |
+| Preloaded worker (standalone) | 14.3 s and 19.6 s |
+| Preloaded worker (inside the app) | 15.4 s |
+| Within the six-clip benchmark | 5.7–11.8 s for 2.0–4.4 s of speech, about 2.6–3.7× the audio length |
+
+The small ONNX voice (`jq/vits-tts-lug-eng-onnx`) ran but its output was never confirmed to be speech: Pi 4 float32 1.9–2.6 s per sentence, int8 7.6–9.9 s; Orange Pi float32 3.0–7.0 s, int8 18–29 s; Mac float32 0.1–0.2 s, int8 0.8–1.2 s. It was not adopted.
 
 ### Text generation (Gemma4-E2B, Q4_K_M)
 

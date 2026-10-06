@@ -72,7 +72,7 @@ The Gemma model card's own evaluation (full-precision weights; not re-measured f
 | [Part 4: live audio and demo](docs/04-live-audio-demo.md) | Real mic and headset, terminal demo (Steps 19–22) |
 | [Part 5: touchscreen device](docs/05-touchscreen-device.md) | Display, touch fix, UI, launcher (Steps 23–26) |
 | [Part 6: a second, faster pipeline](docs/06-fast-pipeline.md) | Whisper + NLLB int8 instead of Gemma for listening and translating, kept loaded in memory: about 3× faster per spoken round trip on the Pi 4 in a six-clip head-to-head; also Orange Pi and Mac measurements |
-| [Benchmarks](docs/benchmarks.md) | Timing, memory, size |
+| [Benchmarks](docs/benchmarks.md) | Timing, memory, size, including the two pipelines side by side |
 | [Quantization comparison](docs/quantization-sweep.md) | Eight levels: size, translation quality, Pi speed and memory |
 | [Rebuilding from scratch](docs/rebuild-from-scratch.md) | A blank-card rebuild: what was identical, what differed, damaged files |
 | [LiteRT-LM evaluation](docs/litert-lm-evaluation.md) | Google's runtime as an alternative; not adopted |
