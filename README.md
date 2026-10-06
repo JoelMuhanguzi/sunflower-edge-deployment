@@ -32,8 +32,9 @@ Measured on a Raspberry Pi 4 Model B (8 GB), CPU only. Mostly **single runs** on
 | Quantization level | Q4_K_M compared with seven other levels: **no detectable translation-quality loss** against the unquantized model and no broken outputs; higher levels were 20–40% slower on the Pi ([details](docs/quantization-sweep.md)) |
 | Text generation (Q4_K_M) | ~2.45 tokens/s generation, ~6.0 prompt (3-repetition benchmark, ±0.02) |
 | Memory during audio + text inference | system memory in use peaked at ~2.6 GB of 7.6 GB, excluding cached file pages (≈0.75 GB of that is idle baseline); the text model process's peak resident memory, including its mapped file, is ~3.5 GB |
-| Speech → transcript | ~30 s warm, ~2 min on a cold start |
-| Transcript → translation | ~18 s warm |
+| Speech → transcript | **~78 s** for a 5 s recording (median of five runs; ~2.5 min on the first call after a cold start). An earlier figure of ~30 s came from a clip about a second long |
+| Transcript → translation | ~21 s (median of six runs; ~18 s was measured earlier on a short sentence) |
+| Whole spoken round trip | **~2 min** (median 121 s over six clips; see [Part 6](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips) for the faster second pipeline) |
 | Speech synthesis | ~3–4.5× slower than real time |
 
 ### What to expect
@@ -50,7 +51,7 @@ The model card's own evaluation (full-precision weights; not re-measured for our
 | [Part 3: text-to-speech](docs/03-text-to-speech.md) | Three TTS approaches tried; two kept (Steps 14–18) |
 | [Part 4: live audio and demo](docs/04-live-audio-demo.md) | Real mic and headset, terminal demo (Steps 19–22) |
 | [Part 5: touchscreen device](docs/05-touchscreen-device.md) | Display, touch fix, UI, launcher (Steps 23–26) |
-| [Part 6: a second, faster pipeline](docs/06-fast-pipeline.md) | Whisper + NLLB int8 instead of Gemma for listening and translating, kept loaded in memory; measurements on Pi 4, Orange Pi and Mac (preliminary) |
+| [Part 6: a second, faster pipeline](docs/06-fast-pipeline.md) | Whisper + NLLB int8 instead of Gemma for listening and translating, kept loaded in memory: about 3× faster per spoken round trip on the Pi 4 in a six-clip head-to-head; also Orange Pi and Mac measurements |
 | [Benchmarks](docs/benchmarks.md) | Timing, memory, size |
 | [Quantization comparison](docs/quantization-sweep.md) | Eight levels: size, translation quality, Pi speed and memory |
 | [Rebuilding from scratch](docs/rebuild-from-scratch.md) | A blank-card rebuild: what was identical, what differed, damaged files |

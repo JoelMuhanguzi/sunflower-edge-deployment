@@ -9,8 +9,10 @@ Same screens and voice output as sunflower_touch_ui.py, but with the other model
 Both models are loaded once at start-up; each stage's time is shown and logged.
 """
 
+import difflib
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -30,9 +32,18 @@ SPEAKER_DEVICE = "plughw:2,0"
 RECORD_SECONDS = 5
 MIC_GAIN_PERCENT = 62
 # Whisper normally pads every clip to 30 s, which is most of its cost on the Pi.
-# The app records RECORD_SECONDS, so the encoder only needs that much (set
-# FAST_WINDOW=30 in the environment to run the stock window for comparison).
-WINDOW_SECONDS = float(os.environ.get("FAST_WINDOW", RECORD_SECONDS))
+# The app records RECORD_SECONDS and the encoder gets one second more: a window of exactly
+# the recording length made Whisper repeat sentences (see docs/06-fast-pipeline.md).
+# FAST_WINDOW=30 runs the stock window for comparison.
+WINDOW_SECONDS = float(os.environ.get("FAST_WINDOW", RECORD_SECONDS + 1))
+# Whisper decoding settings found on six recorded clips (docs/06-fast-pipeline.md): no timestamp
+# tokens and no repeated 3-grams, plus a cap on new tokens so a runaway loop cannot cost minutes.
+# Override with FAST_NO_TIMESTAMPS=0, FAST_NO_REPEAT=0, FAST_MAX_TOKENS=<n>.
+DECODE_OPTS = {"max_new_tokens": int(os.environ.get("FAST_MAX_TOKENS", "64"))}
+if os.environ.get("FAST_NO_TIMESTAMPS", "1") == "1":
+    DECODE_OPTS["without_timestamps"] = True
+if int(os.environ.get("FAST_NO_REPEAT", "3")) > 0:
+    DECODE_OPTS["no_repeat_ngram_size"] = int(os.environ.get("FAST_NO_REPEAT", "3"))
 LOG_PATH = f"{HOME}/ml/demo_scratch/fast_pipeline_log.jsonl"
 VITS_WORKER = f"{PIPELINE2}/vits_worker.py"
 PRELOADED_VOICES = ("English", "Luganda")  # kept in memory by the worker
@@ -75,6 +86,20 @@ def play_audio(path):
     run(["aplay", "-D", SPEAKER_DEVICE, path])
 
 
+def collapse_repeats(text):
+    """Whisper on a short window sometimes says the sentence twice ("X. X."). Keep the first of
+    each run of near-identical sentences (only sentences of 3+ words are compared)."""
+    def norm(t):
+        return re.sub(r"[^\w\s']", "", t.lower()).strip()
+    kept = []
+    for part in (p for p in re.split(r"(?<=[.?!])\s+", text.strip()) if p):
+        if (kept and len(norm(part).split()) >= 3
+                and difflib.SequenceMatcher(None, norm(kept[-1]), norm(part)).ratio() >= 0.8):
+            continue
+        kept.append(part)
+    return " ".join(kept)
+
+
 class Engine:
     """Whisper (speech -> text) and NLLB (translation), loaded once and kept in memory."""
 
@@ -96,10 +121,11 @@ class Engine:
         """Speech -> text in the speaker's own language (no translation)."""
         segments, _ = self.whisper.transcribe(
             audio_path, language=self.whisper_code[lang_name], beam_size=1,
-            condition_on_previous_text=False)
+            condition_on_previous_text=False, **DECODE_OPTS)
         segments = list(segments)  # decoding happens while iterating
-        self.last_tokens = sum(len(s.tokens) for s in segments)  # includes timestamp tokens
-        return " ".join(s.text.strip() for s in segments).strip()
+        self.last_tokens = sum(len(s.tokens) for s in segments)
+        self.last_raw = " ".join(s.text.strip() for s in segments).strip()
+        return collapse_repeats(self.last_raw)
 
     def translate(self, text, src_name, dst_name):
         out = self.translator.translate(" ".join(text.split()), ISO[src_name], ISO[dst_name])
@@ -426,6 +452,8 @@ class SunflowerApp:
             heard = self.engine.transcribe(audio_path, src)
             times["Listen"] = time.perf_counter() - t0
             self.last_counts["listen_tokens"] = self.engine.last_tokens
+            if self.engine.last_raw != heard:
+                self.last_counts["heard_raw"] = self.engine.last_raw
             if not heard:
                 self.set_status("Couldn't make out any speech.")
                 return
@@ -490,7 +518,7 @@ class SunflowerApp:
             with open(LOG_PATH, "a") as f:
                 f.write(json.dumps({
                     "time": time.strftime("%Y-%m-%d %H:%M:%S"), "pipeline": "whisper+nllb",
-                    "window_s": WINDOW_SECONDS, "mode": mode, "src": src, "dst": dst,
+                    "window_s": WINDOW_SECONDS, "decode_opts": DECODE_OPTS, "mode": mode, "src": src, "dst": dst,
                     "seconds": {k: round(v, 2) for k, v in times.items()},
                     "voice": self.last_voice, "tokens": self.last_counts,
                     "heard": heard, "translated": translated}, ensure_ascii=False) + "\n")

@@ -30,7 +30,7 @@ The non-obvious things we learned deploying an African-language speech model to 
 ## Software on a touchscreen
 
 15. **Drop-down menus do not work reliably with touch under Wayland/XWayland.** Tk popup menus are separate windows; taps opened them but selections were not captured. An in-app full-screen picker fixed it ([Part 5](05-touchscreen-device.md)).
-16. **Separate "transcribe" and "translate" steps** cost about 20 s extra on the Pi but give a transcript to display and check (single warm runs: ~30 s and ~18 s; a cold start takes ~2 min) ([Part 5](05-touchscreen-device.md)).
+16. **Separate "transcribe" and "translate" steps** cost about 20 s extra on the Pi but give a transcript to display and check (measured with 5 s recordings: median ~78 s and ~21 s; the earlier ~30 s and ~18 s figures came from a short clip and a short sentence, and the first call after a cold start takes ~150 s to listen. [Part 6](06-fast-pipeline.md) shows that keeping models loaded and using smaller specialist models cuts this a lot) ([Part 5](05-touchscreen-device.md)).
 
 ## Alternative runtime
 

@@ -4,13 +4,13 @@
 
 The first pipeline ([Parts 1–5](01-text-model.md)) uses one model, Sunflower-Gemma4-E2B, for both listening and translating. After it worked, Sunbird's other published models suggested a second route: a Whisper-based speech recogniser and an NLLB translation model, each smaller than the Gemma checkpoint, which we could keep loaded in memory. This page records how that pipeline was built, how it was measured, and what is and is not established. **Both apps are kept** so the pipelines can be compared on the same device (Raspberry Pi 4, 8 GB, CPU only).
 
-> **Status: preliminary.** The Pi 4 end-to-end figures come from a person speaking into the touchscreen app, a few runs on one sentence. They show that the second pipeline is faster, not by exactly how much. A controlled head-to-head (same recorded clips through both pipelines, no human in the loop) is still to be done; see [Not yet established](#not-yet-established).
+> **Status.** The second pipeline was timed against the first on the Pi 4 with the same six recorded clips and a controlled setup ([head-to-head](#head-to-head-on-the-pi-4-six-recorded-clips)): about **three times faster** for a spoken round trip, with comparable accuracy on those clips. The sample is small (one speaker, six clips), so read the accuracy as "not obviously worse", not as a measured ranking; see [Not yet established](#not-yet-established).
 
 ## The two pipelines
 
 | Stage | First app (`sunflower_touch_ui.py`) | Second app (`scripts/fast/sunflower_fast_ui.py`) |
 |---|---|---|
-| Speech → text | Gemma4-E2B Q4_K_M + audio encoder (`llama-mtmd-cli`) | Sunbird faster-whisper (Whisper large-v3 fine-tune for 51 African languages), **int8**, 5 s window |
+| Speech → text | Gemma4-E2B Q4_K_M + audio encoder (`llama-mtmd-cli`) | Sunbird faster-whisper (Whisper large-v3 fine-tune for 51 African languages), **int8**, 6 s window, no timestamp tokens, repeat guards |
 | Translation | Gemma4-E2B Q4_K_M (`llama-cli`) | Sunbird NLLB-1.3B (SALT), **int8** (CTranslate2) |
 | Speech out | Sunbird VITS / Meta MMS, started per tap | Same voices; English and Luganda **kept loaded** in a background worker |
 | Model loading | Every tap (new process each time) | Once, at start-up (about 70 s) |
@@ -26,11 +26,22 @@ Neither model could be used as published on the Pi.
 - **NLLB.** Sunbird's published 8-bit file (`translate-nllb-1.3b-salt-8bit`) uses bitsandbytes, which needs a GPU. We downloaded the full-precision `Sunbird/translate-nllb-1.3b-salt` (5.1 GB) and converted it on the Mac with `ct2-transformers-converter --quantization int8`, copying the tokenizer files. Result: 1.38 GB. The converter needed `transformers==4.56.2` plus `protobuf`; transformers 5.x could not load the tokenizer and an older 4.4x lacked an argument the converter passes.
 - **Whisper.** The faster-whisper repository stores float16 (3.09 GB) and quantizes on the fly when loaded, which on the Pi 4 took **82 s** to load and spiked memory. We instead converted the original `Sunbird/SunflowerASR-51-african-languages` (6.17 GB, float32) to a saved int8 model (**1.56 GB**) with the same converter (`--low_cpu_mem_usage`). Two fixes were needed: rename `extra_special_tokens` to `additional_special_tokens` in the original's `tokenizer_config.json` (it was written by a newer transformers), and copy `language_map.json`, `preprocessor_config.json`, `vocab.json` and `merges.txt` from the faster-whisper repository. Transcripts matched the on-the-fly version on four clips, apart from a comma. Pi 4 load time fell from 82 s to **2.8 s**.
 - **Language tokens.** The Whisper model reuses Whisper's unused language tokens for African languages (`lug`→`sd`, `nyn`→`si`, `ach`→`su`). The model card warns against automatic language detection, so the app always passes the token from `language_map.json`.
-- **The 5 s window.** Whisper pads every clip to 30 s before its encoder, so time barely depends on clip length (Mac: 1.3 s clip 6.5 s, 4 s clip 6.4 s). The apps record exactly 5 s, so the encoder window is shortened to 5 s by replacing faster-whisper's `pad_or_trim` (`WINDOW_SECONDS` in `stt_fw.py`; `FAST_WINDOW` in the app). **Accuracy risk:** on a 4 s clip the Mac transcript changed from "How are you today?" to "Hawaii today" at every shorter window, including 15 s. It has not been tested on enough real speech.
+- **The encoder window.** Whisper pads every clip to 30 s before its encoder, so time barely depends on clip length (Mac: 1.3 s clip 6.5 s, 4 s clip 6.4 s). The apps record 5 s, so the window is shortened by replacing faster-whisper's `pad_or_trim` (`FAST_WINDOW` in the app, `WINDOW_SECONDS` in `stt_fw.py`). **A window exactly as long as the recording is a trap:** Whisper often repeated the sentence (3 of 6 clips), and one run looped for 300 s. A sweep over the six recorded clips (Mac, int8, `scripts/fast/experiments/stt_sweep.py`) picked a 6 s window with no timestamp tokens and no repeated 3-grams:
+
+  | Window | Setting | Mean word error rate | Mean time per clip | Clips with repeated text |
+  |---|---|---|---|---|
+  | 5 s | default | 1.03 | 4.0 s | 3 of 6 |
+  | 5 s | no timestamps + no repeat | 0.53 | 1.6 s | 3 of 6 |
+  | 6 s | default | 0.42 | 1.6 s | 1 of 6 |
+  | **6 s** | **no timestamps + no repeat** | **0.23** | **1.6 s** | 1 of 6 |
+  | 8 s | no timestamps | 0.26 | 2.0 s | 1 of 6 |
+  | 30 s (stock) | any of five | 0.18–0.23 | 7.7–8.1 s | 0 of 6 |
+
+  Two guards sit on top: a cap of 64 new tokens, and removal of a repeated sentence (`collapse_repeats` in the app; only sentences of three or more words are compared). Separately, on a 4 s clip a short window changed "How are you" to "Hawaii" at every window up to 15 s; that effect has not been measured on a larger set.
 
 ## Measurements
 
-All times are seconds. "Cold/warm" are given only where measured; Whisper and NLLB showed no warm-up benefit. Single-run figures carry the usual caveat: the Pi 4 reached its temperature limit (84–85 °C) in every Whisper run, so these include thermal throttling.
+All times are seconds. "Cold/warm" are given only where measured; Whisper and NLLB showed no warm-up benefit. Single-run figures carry the usual caveat: the Pi 4 reached its temperature limit (84–85 °C) in every Whisper run, so these include thermal throttling, even though the board has heatsinks and two fans (normal for sustained four-core load).
 
 ### Speech to text: Whisper int8, English clip of 1.1 s
 
@@ -66,33 +77,37 @@ NLLB and Gemma gave word-for-word identical Luganda on three of four test senten
 
 Loading the English and Luganda voices into the worker takes about 26 s once at start-up. The synthesis cost (about 3.7–5× the audio length) is unchanged; the worker removes the per-tap load and process start-up (about 10 s).
 
-### Whole run on the Pi 4 (fast app, Translate English → Luganda)
+### Head-to-head on the Pi 4, six recorded clips
 
-The same spoken phrase ("I am very sick and not feeling well, take me to the hospital") twice:
+**Method.** Six 5-second recordings of one speaker (three English, three Luganda; `scripts/fast/record_set.py`) went through each setup on the same Pi 4: English clips were translated into Luganda, Luganda clips into English, and the translation was spoken. `scripts/fast/bench_compare.py` timed the three stages identically in every setup, one setup per process so memory was freed between them, with the CPU cooled below 60 °C before each and an unscored warm-up run for the setups that stay loaded. Setups:
 
-| | Listen | Translate | Voice | **Total** |
-|---|---|---|---|---|
-| Voice loaded per tap | 20.9 | 14.5 | 53.3 | **88.7** |
-| Voice preloaded | 20.3 | 14.7 | 15.4 | **50.3** |
+- **A** the first app as it is (a new process per call, voice loaded per tap);
+- **B** the first app's model kept loaded in `llama-server` (prompt cache **off**, so repeated inputs are not flattered) with the English and Luganda voices preloaded;
+- **C-5s** the second app with a 5 s window; **C-tuned** with a 6 s window, no timestamp tokens and no repeated 3-grams passed in from outside; **C-final** the finished app with those as defaults plus the two guards.
 
-The two transcripts were close but not identical ("…very sick and am not feeling well…" against "…very sick and not feeling well…"); both translations began "Ndi mulwadde nnyo era siwulira bulungi ntwale…".
+**Median per clip, seconds** (raw runs in `results/pi4-headtohead-2026-10-06/`):
 
-### Comparison with the first pipeline
+| Setup | Listen | Translate | Voice | **Total** | Slowest run | Start-up | Word error rate | Clips with repeats | Max CPU temp |
+|---|---|---|---|---|---|---|---|---|---|
+| **A** first app | 78.8 | 21.3 | 24.1 | **121.6** | 200.5 (cold first call) | none | 0.09 | 0 of 6 | 78 °C |
+| **B** Gemma kept loaded | 43.6 | 12.4 | 9.6 | **65.1** | 70.8 | 56 s | 0.09 | 0 of 6 | 79 °C |
+| **C-5s** second app, 5 s window | 27.0 | 15.0 | 13.5 | 56.2 | **335.7** (a 299 s loop) | 96 s | 1.03 | 3 of 6 | 72 °C |
+| **C-tuned** 6 s window + options | 19.8 | 11.6 | 10.1 | 42.6 | 45.2 | 107 s | 0.23 | 1 of 6 | 72 °C |
+| **C-final** finished app | **19.3** | **10.7** | **9.9** | **40.8** | 43.5 | 102 s | **0.06** | 0 of 6 | 72 °C |
 
-The first app has no timing display, so **no same-sentence, same-session run of it exists**. The estimate below uses its earlier benchmarks and should be replaced by a measured head-to-head:
+Without its cold first call, A's median total is 121.3 s (listen 78.4, translate 22.3, voice 20.5).
 
-| | First app (earlier benchmarks) | Second app (measured above) |
-|---|---|---|
-| Speech → text | about 30 s warm, about 2 min cold | 20–29 s in the app (12.6–14 s for a short clip) |
-| Translation | about 18 s warm | 6–15 s, depending on sentence length |
-| Voice | about 30 s with a per-tap load (estimate for the same sentence) | about 15 s, preloaded |
-| Start-up | none, but every tap loads | about 70 s, then resident |
-| Memory | one model process at a time | 3.9 GB in use with Whisper and NLLB loaded; 4.6 GB in use after a run with the voice worker (single readings of `free`) |
-| **Estimated whole run** | **roughly 75–100 s** (estimate, not measured) | **50.3 s** (measured, one run) |
+- **Speed.** C-final is about **3.0× faster than A** (121.6 s to 40.8 s) and **1.6× faster than B** (65.1 s to 40.8 s). Keeping Gemma loaded alone (A to B) nearly halves the time, so part of the second app's gain comes from keeping models resident and part from the smaller models: the model choice is worth the 65 s to 41 s step.
+- **Cost.** The second app needs about 100 s to start and keeps its models in memory (3.9 GB in use with Whisper and NLLB loaded, 4.6 GB after a run with the voices). The first app starts instantly but pays its loads on every tap.
+- **Accuracy.** English was transcribed exactly by A, B and C-final. In Luganda, A and B scored 0.40, 0.17 and 0.00 on the three clips and C-final 0.20, 0.17 and 0.00. Word error rate is computed against the sentences the speaker was asked to read, ignoring punctuation and case; Luganda spelling variants count as errors. **This is six clips from one speaker, and the repeat guard was designed while looking at the same clips, so C-final's score is optimistic.** Translation quality was not scored.
+- **Repeats.** In C-5s the repeated sentence was also translated and spoken twice, so a repeat cost time in all three stages; the 299 s run is one clip looping until the length limit.
+- **Temperature.** Every setup ran sustained on four cores; A and B reached 78–79 °C with the soft temperature limit active at times, C about 72 °C.
+
+**Hand-driven runs in the touchscreen app** (a person speaking, one sentence) before the benchmark: voice loaded per tap, listen 20.9 + translate 14.5 + voice 53.3 = **88.7 s**; with the voice worker, 20.3 + 14.7 + 15.4 = **50.3 s**. The 53 s voice step was not reproduced when the same sentence was synthesized outside the app (31 s); the extra time is unexplained.
 
 ### Tokens per second
 
-The second app now records `tokens.listen_tokens` (Whisper decoder tokens, including timestamp tokens) and `tokens.translate_tokens` (NLLB tokens) with each run in `~/ml/demo_scratch/fast_pipeline_log.jsonl`, next to the stage times, so tokens per second can be computed per run. **No such figures exist yet**; they appear after the next runs. For the first pipeline, `llama-bench` (3 repetitions, Q4_K_M) measured **5.99 ± 0.02 prompt and 2.45 ± 0.01 generated tokens/s**. Whisper's time includes its fixed encoder cost, so tokens/s for it is a per-run figure, not a model constant.
+Generation speed of the first pipeline's model was **2.40–2.47 tokens/s** in setups A and B (taken from llama.cpp's own timing output), matching the 2.45 from `llama-bench`; keeping it loaded does not change generation speed, it removes load and prompt costs. (Setup A's listening step does not report its figures in a form the script parses, so that stage has none.) For the second pipeline the benchmark records the tokens each stage produced; dividing by the stage's whole time gives **about 0.7 tokens/s for Whisper** (median 14 tokens in 19.3 s) and **about 1.0 for NLLB** (12 tokens in 10.7 s). Those are end-to-end stage rates including the encoder, the beam search and tokenisation, not decoding speeds, so they are not comparable with Gemma's 2.4; the comparable quantity is seconds per stage (the table above). The voice runs at about **2.6–3.7× the audio length** (6.1–11.8 s for 2.0–4.4 s of speech).
 
 ### The persistent Gemma server (a side test)
 
@@ -108,13 +123,15 @@ Four Cortex-A53 cores at 1.5 GHz and 3.9 GB of memory, no passwordless `sudo`. W
 
 ## Not yet established
 
-- A **controlled head-to-head** of both pipelines on identical recorded clips with all stages timed the same way.
-- **Accuracy** of the 5 s window and of the int8 Whisper on real English and Luganda speech (word error rate against references), and translation quality judged by Luganda speakers.
-- How the NLLB beam size (5 now) trades time for quality.
-- The effect of **cooling**: every Pi 4 run hit its temperature limit.
-- Runs on the **Pi 5**, and whether the ONNX voice can be used at all.
-- Whisper encoder and decoder time measured **separately** (the encoder is only inferred to dominate at the stock window).
+- **More speakers and more clips.** Six clips from one speaker, with reference sentences we chose, show the setups are comparable, not which is more accurate. The repeat guard and window were tuned on these clips.
+- **Translation quality**, judged by Luganda speakers; NLLB's beam size (5 now) against time.
+- **Whisper encoder and decoder time measured separately** (the encoder is inferred to dominate at the stock window).
+- **Pi 5 runs**, and whether the small ONNX voice can be used at all.
+- **The unexplained 53 s voice step** inside the app (31 s standalone).
+- Cooling is not an open question: the Pi 4 has heatsinks and two fans and still reached 78–79 °C under the first app's sustained load.
 
 ## Reproduce
 
 `scripts/fast/` holds the app (`sunflower_fast_ui.py`), the translator (`nllb_translate.py`), the voice worker (`vits_worker.py`), the Whisper script (`stt_fw.py`) and a launcher template. Failed or side experiments are in `scripts/fast/experiments/`. The app expects `~/ml/pipeline2/` with `venv/` (faster-whisper, ctranslate2, transformers, sentencepiece, protobuf; `av<17` on the Pi because faster-whisper 1.2.1 fails with newer PyAV), `models/whisper-51-int8/` and `models/nllb-salt-ct2-int8/`. Models are never included. Verify copies with SHA-256: one 1.4 GB file was silently damaged on the same USB drive that damaged files before ([rebuild-from-scratch.md](rebuild-from-scratch.md)).
+
+**The benchmark.** `scripts/fast/record_set.py` records the six clips on the Pi; `bench_compare.py A|B|C` times one setup per run (`run_bench_all.sh` runs all four); `bench_summary.py` prints the medians, word error rates and tokens/s from the JSON lines in `results/`. The clips themselves (a person's voice) are not included.
