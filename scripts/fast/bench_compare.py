@@ -3,7 +3,7 @@
 
     bench_compare.py A|B|C [--clips ~/ml/bench_clips/clips.json] [--repeat N]
 
-  A  first app as it is:   Gemma (llama-mtmd-cli / llama-cli, new process per call) + VITS per call
+  A  first app as it was (frozen copy sunflower_touch_ui_per_tap.py): Gemma (llama-mtmd-cli / llama-cli, new process per call) + VITS per call
   B  first app, loaded:    Gemma in a persistent llama-server (prompt cache OFF) + preloaded voices
   C  second app:           Whisper int8 (5 s window) + NLLB int8, loaded once + preloaded voices
 
@@ -95,7 +95,7 @@ class SetupA:
     """The first app's exact commands, one new process per call."""
 
     def __init__(self):
-        import sunflower_touch_ui as old
+        import sunflower_touch_ui_per_tap as old
         self.old = old
         self.startup = 0.0
 
@@ -136,7 +136,7 @@ class SetupB(VoiceWorkerMixin):
     URL = "http://127.0.0.1:8081"
 
     def __init__(self):
-        import sunflower_touch_ui as old
+        import sunflower_touch_ui_per_tap as old
         t0 = time.time()
         server = f"{HOME}/ml/llama.cpp/build/bin/llama-server"
         self.srv = subprocess.Popen(

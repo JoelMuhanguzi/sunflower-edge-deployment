@@ -4,30 +4,44 @@ Sunflower-Gemma4-E2B touchscreen interface for the MHS-3.5" display (480x320).
 Translate mode: speech -> transcript -> translation -> spoken reply.
 Transcribe mode: speech -> transcript on screen (no translation, no audio out).
 Languages are chosen with on-screen pickers.
-Reuses the same subprocess-based pipeline calls as sunflower_demo.py.
+
+Models stay in memory: Gemma and its audio encoder are held by a local llama-server, and the
+English and Luganda voices by a background worker, so a tap pays no load time (start-up takes
+1 to 2 minutes). Other voices (Runyankole, Swahili, Acholi) are still loaded per tap. Each
+stage's time is shown and logged. The earlier version that started Gemma afresh on every tap
+is kept as sunflower_touch_ui_per_tap.py (git tag v1-first-app-per-tap).
 """
 
+import atexit
+import base64
+import json
 import os
 import subprocess
 import threading
+import time
 import tkinter as tk
+import urllib.request
 
 HOME = os.path.expanduser("~")
-LLAMA_CLI = f"{HOME}/ml/llama.cpp/build/bin/llama-cli"
-MTMD_CLI = f"{HOME}/ml/llama.cpp/build/bin/llama-mtmd-cli"
+LLAMA_SERVER = f"{HOME}/ml/llama.cpp/build/bin/llama-server"
+SERVER_PORT = 8090
 TEXT_MODEL = f"{HOME}/ml/gguf/sunflower-gemma4-e2b-Q4_K_M.gguf"
 MMPROJ = f"{HOME}/ml/gguf/mmproj-sunflower-gemma4-e2b-f16.gguf"
 VITS_DIR = f"{HOME}/ml/vits-work/training"
 VITS_VENV_PY = f"{HOME}/ml/vits-venv/bin/python"
 TTS_VENV_PY = f"{HOME}/ml/tts-venv/bin/python"
+VITS_WORKER = f"{HOME}/ml/vits_worker.py"  # shared with the second app
 
 MIC_DEVICE = "plughw:3,0"
 SPEAKER_DEVICE = "plughw:2,0"
 RECORD_SECONDS = 5
 MIC_GAIN_PERCENT = 62
+PRELOADED_VOICES = ("English", "Luganda")  # kept in memory by the worker
+MIN_FREE_GB = 5.0  # Gemma server + voices need about this much; Sunflower Fast must be closed first
 
 SCRATCH = f"{HOME}/ml/demo_scratch"
 os.makedirs(SCRATCH, exist_ok=True)
+LOG_PATH = f"{SCRATCH}/first_app_log.jsonl"
 
 # Languages offered in the UI. VITS entries point at a local Sunbird
 # checkpoint; MMS entries give the facebook/mms-tts-<code> language code.
@@ -60,59 +74,91 @@ def play_audio(path):
     run(["aplay", "-D", SPEAKER_DEVICE, path])
 
 
-def llama_audio_understand(audio_path, instruction, n_predict=128, temp=0.3):
-    result = run([
-        MTMD_CLI, "-m", TEXT_MODEL, "--mmproj", MMPROJ,
-        "--audio", audio_path, "--jinja",
-        "-p", instruction, "-n", str(n_predict), "--temp", str(temp),
-    ])
-    if result.returncode != 0:
-        return None
-    reply = result.stdout.strip()
-    return reply if reply else None
+def mem_available_gb():
+    with open("/proc/meminfo") as f:
+        for line in f:
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 1048576
+    return 0.0
 
 
-def transcribe_audio(audio_path, lang_name):
-    """Speech -> text in the speaker's own language (no translation)."""
-    instruction = (
-        f"The speaker is speaking {lang_name}. Transcribe exactly what they "
-        f"said, written in {lang_name}. Respond with only the transcription, "
-        f"nothing else."
-    )
-    return llama_audio_understand(audio_path, instruction)
+class GemmaServer:
+    """llama-server holding Gemma and its audio encoder in memory; one request per stage."""
+
+    def __init__(self):
+        self.url = f"http://127.0.0.1:{SERVER_PORT}"
+        self.proc = None
+        if not self._healthy():  # reuse a server that is already running
+            self.proc = subprocess.Popen(
+                [LLAMA_SERVER, "-m", TEXT_MODEL, "--mmproj", MMPROJ, "--jinja",
+                 "--host", "127.0.0.1", "--port", str(SERVER_PORT), "-c", "2048", "-t", "4"],
+                stdout=open(f"{SCRATCH}/llama_server.log", "w"), stderr=subprocess.STDOUT)
+            atexit.register(self.close)
+            deadline = time.time() + 600
+            while not self._healthy():
+                if self.proc.poll() is not None:
+                    raise RuntimeError("llama-server exited")
+                if time.time() > deadline:
+                    raise RuntimeError("llama-server did not become ready")
+                time.sleep(3)
+
+    def _healthy(self):
+        try:
+            return b"ok" in urllib.request.urlopen(self.url + "/health", timeout=3).read()
+        except Exception:
+            return False
+
+    def _chat(self, content, max_tokens=128, temp=0.3):
+        body = json.dumps({"messages": [{"role": "user", "content": content}],
+                           "max_tokens": max_tokens, "temperature": temp,
+                           "cache_prompt": False}).encode()
+        req = urllib.request.Request(self.url + "/v1/chat/completions", body,
+                                     {"Content-Type": "application/json"})
+        out = json.load(urllib.request.urlopen(req, timeout=900))
+        return out["choices"][0]["message"]["content"].strip()
+
+    def transcribe(self, audio_path, lang_name):
+        """Speech -> text in the speaker's own language (no translation)."""
+        instruction = (
+            f"The speaker is speaking {lang_name}. Transcribe exactly what they "
+            f"said, written in {lang_name}. Respond with only the transcription, "
+            f"nothing else."
+        )
+        audio = base64.b64encode(open(audio_path, "rb").read()).decode()
+        return self._chat([{"type": "input_audio", "input_audio": {"data": audio, "format": "wav"}},
+                           {"type": "text", "text": instruction}])
+
+    def translate(self, text, dst_name):
+        """Text -> text translation (the same model, no audio)."""
+        return self._chat(f"Translate to {dst_name}: " + " ".join(text.split()))
+
+    def close(self):
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
 
 
-def _extract_reply(stdout, echoed_prompt):
-    """llama-cli prints a banner, then '> <prompt>', the reply, a blank line
-    and a '[ Prompt: ... ]' stats line. Return just the reply text."""
-    lines = stdout.splitlines()
-    start = None
-    for i, line in enumerate(lines):
-        if line.strip() == f"> {echoed_prompt}".strip():
-            start = i
-            break
-    if start is None:
-        return None
-    reply = []
-    for line in lines[start + 1:]:
-        if line.strip().startswith("[ Prompt:") or not line.strip():
-            if reply:
-                break
-            continue
-        reply.append(line.strip())
-    return " ".join(reply) if reply else None
+class VitsWorker:
+    """Background process that keeps the Sunbird VITS voices loaded (see vits_worker.py)."""
 
+    def __init__(self, model_dirs):
+        self.lock = threading.Lock()
+        self.proc = subprocess.Popen(
+            [VITS_VENV_PY, VITS_WORKER, *model_dirs], cwd=VITS_DIR, text=True, bufsize=1,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=open(f"{SCRATCH}/vits_worker.log", "w"))
+        self._read("READY")  # blocks until the voices are loaded
 
-def translate_text(text, dst_name, n_predict=128, temp=0.3):
-    """Text -> text translation with the text-only model (fast: no audio encoder)."""
-    prompt = f"Translate to {dst_name}: " + " ".join(text.split())
-    result = run([
-        LLAMA_CLI, "-m", TEXT_MODEL, "-p", prompt,
-        "-n", str(n_predict), "--temp", str(temp), "--single-turn",
-    ])
-    if result.returncode != 0:
-        return None
-    return _extract_reply(result.stdout, prompt)
+    def _read(self, tag):
+        for line in self.proc.stdout:
+            if line.startswith(f"@@{tag} "):
+                return json.loads(line[len(tag) + 3:])
+        raise RuntimeError("VITS worker exited")
+
+    def speak(self, model_dir, text, out_path):
+        with self.lock:
+            self.proc.stdin.write(json.dumps({"dir": model_dir, "text": text, "out": out_path}) + "\n")
+            self.proc.stdin.flush()
+            return self._read("RESULT")
 
 
 def speak_text(text, lang_name, out_path):
@@ -155,6 +201,35 @@ class SunflowerApp:
         self.busy = False
 
         self._build_ui()
+
+        self.server = None
+        self.vits = None
+        self.last_voice = {}
+        self.busy = True
+        self.record_btn.config(state="disabled", bg="#555")
+        self.status_var.set("Loading models... (1 to 2 minutes)")
+        threading.Thread(target=self._load_models, daemon=True).start()
+
+    def _load_models(self):
+        t0 = time.perf_counter()
+        free = mem_available_gb()
+        if free < MIN_FREE_GB:
+            self.set_status(f"Only {free:.1f} GB free. Close Sunflower Fast, then reopen this app.")
+            return
+        try:
+            self.server = GemmaServer()
+            self.set_status("Loading voices (English, Luganda)...")
+            try:
+                self.vits = VitsWorker([LANGUAGES[n]["dir"] for n in PRELOADED_VOICES])
+            except Exception as e:  # fall back to loading a voice on every tap
+                print("voice worker unavailable:", repr(e), flush=True)
+        except Exception as e:
+            self.set_status(f"Model load failed: {type(e).__name__}")
+            print("model load failed:", repr(e), flush=True)
+            return
+        self.busy = False
+        self.set_status(f"Ready (models loaded in {time.perf_counter() - t0:.0f} s)")
+        self.ui(lambda: self.record_btn.config(state="normal", bg="#ffaa28"))
 
     def _build_ui(self):
         # Sunbird AI brand colors (extracted from sunbird.ai stylesheet)
@@ -362,6 +437,8 @@ class SunflowerApp:
         ).start()
 
     def _run_pipeline(self, mode, src, dst):
+        times, heard, translated = {}, "", ""
+        self.last_voice = {}
         try:
             self.ui(self._show_texts, "", "", "", "")
 
@@ -372,23 +449,27 @@ class SunflowerApp:
                 return
 
             # Step 1: speech -> text in the speaker's own language.
-            self.set_status(f"Listening ({src})... first run can take ~2 min")
-            heard = transcribe_audio(audio_path, src)
+            self.set_status(f"Listening ({src})...")
+            t0 = time.perf_counter()
+            heard = self.server.transcribe(audio_path, src)
+            times["Listen"] = time.perf_counter() - t0
             if not heard:
                 self.set_status("Couldn't make out any speech.")
                 return
             self.ui(self._show_texts, f"Heard ({src}):", heard, "", "")
 
             if mode == "Transcribe":
-                self.set_status("Ready")
+                self.set_status(self._summary(times))
                 return
 
             # Step 2: text -> translation (skipped if source == target language).
             if src == dst:
                 translated = heard
             else:
-                self.set_status(f"Translating to {dst}...")
-                translated = translate_text(heard, dst)
+                self.set_status(f"Translating to {dst}...  ({self._summary(times)})")
+                t0 = time.perf_counter()
+                translated = self.server.translate(heard, dst)
+                times["Translate"] = time.perf_counter() - t0
                 if not translated:
                     self.set_status("Translation failed.")
                     return
@@ -396,16 +477,54 @@ class SunflowerApp:
                     f"Translation ({dst}):", translated)
 
             # Step 3: speak the translation.
-            self.set_status(f"Speaking ({dst})...")
+            self.set_status(f"Speaking ({dst})...  ({self._summary(times)})")
+            t0 = time.perf_counter()
             out_path = f"{SCRATCH}/ui_output.wav"
-            if speak_text(translated, dst, out_path):
+            ok = self._speak(translated, dst, out_path)
+            times["Voice"] = time.perf_counter() - t0
+            if ok:
                 play_audio(out_path)
-                self.set_status("Ready")
+                self.set_status(self._summary(times))
             else:
                 self.set_status("Speech synthesis failed.")
+        except Exception as e:  # e.g. the Gemma server stopped; say so instead of dying silently
+            self.set_status(f"Error: {type(e).__name__}")
+            print("pipeline error:", repr(e), flush=True)
         finally:
+            self._log(mode, src, dst, times, heard, translated)
             self.busy = False
             self.ui(lambda: self.record_btn.config(state="normal", bg="#ffaa28"))
+
+    def _speak(self, text, lang_name, out_path):
+        """Use the preloaded worker for English/Luganda; otherwise (or on error) load per tap."""
+        if self.vits and lang_name in PRELOADED_VOICES:
+            try:
+                res = self.vits.speak(LANGUAGES[lang_name]["dir"], text, out_path)
+                self.last_voice = {"path": "worker", **res}
+                if res.get("ok"):
+                    return True
+            except Exception as e:
+                self.last_voice = {"path": "worker", "ok": False, "error": repr(e)[:150]}
+        self.last_voice.setdefault("path", "per-tap")
+        return speak_text(text, lang_name, out_path)
+
+    @staticmethod
+    def _summary(times):
+        total = sum(times.values())
+        return "Done: " + " | ".join(f"{k} {v:.1f}s" for k, v in times.items()) + f" | total {total:.1f}s"
+
+    def _log(self, mode, src, dst, times, heard, translated):
+        """One JSON line per run, so the pipelines can be compared afterwards."""
+        try:
+            with open(LOG_PATH, "a") as f:
+                f.write(json.dumps({
+                    "time": time.strftime("%Y-%m-%d %H:%M:%S"), "pipeline": "gemma-server",
+                    "mode": mode, "src": src, "dst": dst,
+                    "seconds": {k: round(v, 2) for k, v in times.items()},
+                    "voice": self.last_voice, "heard": heard, "translated": translated},
+                    ensure_ascii=False) + "\n")
+        except OSError:
+            pass
 
 
 if __name__ == "__main__":

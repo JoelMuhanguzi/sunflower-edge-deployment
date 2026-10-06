@@ -2,6 +2,8 @@
 
 [← Back to the project README](../README.md)
 
+> **Update after Part 6.** The steps below describe the app as first built: it started Gemma and the voice afresh on every tap, which is why the timings quoted here are long. The app was later changed to keep Gemma, its audio encoder and the English and Luganda voices loaded (`GemmaServer` and `VitsWorker` in `sunflower_touch_ui.py`), at the cost of a 1–2 minute start-up. A round trip fell from a median of 121 s to about 65 s, and each run now shows its stage times and is logged. The original is frozen in `scripts/baseline/sunflower_touch_ui_per_tap.py` (git tag `v1-first-app-per-tap`); see [Part 6](06-fast-pipeline.md) for the measurements and for a second, faster app.
+
 Parts 1–4 produced a working speech pipeline driven from a terminal. This part puts a small touchscreen in front of it: a 3.5" SPI display, a touch UI with on-screen language selection, and a desktop launcher. Most of the effort went into getting the display and touch to behave, so most of this page is about that.
 
 ## Hardware

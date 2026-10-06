@@ -8,7 +8,7 @@ The first pipeline ([Parts 1–5](01-text-model.md)) uses one model, Sunflower-G
 
 ## The two pipelines
 
-| Stage | First app (`sunflower_touch_ui.py`) | Second app (`scripts/fast/sunflower_fast_ui.py`) |
+| Stage | First app as benchmarked (setup A, frozen in `scripts/baseline/`) | Second app (`scripts/fast/sunflower_fast_ui.py`) |
 |---|---|---|
 | Speech → text | Gemma4-E2B Q4_K_M + audio encoder (`llama-mtmd-cli`) | Sunbird faster-whisper (Whisper large-v3 fine-tune for 51 African languages), **int8**, 6 s window, no timestamp tokens, repeat guards |
 | Translation | Gemma4-E2B Q4_K_M (`llama-cli`) | Sunbird NLLB-1.3B (SALT), **int8** (CTranslate2) |
@@ -16,6 +16,8 @@ The first pipeline ([Parts 1–5](01-text-model.md)) uses one model, Sunflower-G
 | Model loading | Every tap (new process each time) | Once, at start-up (about 70 s) |
 | Size on disk (listen + translate) | 3.42 GB + 0.99 GB audio encoder = **4.41 GB** | 1.56 GB + 1.38 GB = **2.94 GB** |
 | Languages | English, Luganda, Runyankole, Swahili, Acholi | Same for transcription. **Translation excludes Swahili** (NLLB-SALT covers eng, ach, lgg, lug, nyn, teo) |
+
+**The first app has since been changed** to keep Gemma, its audio encoder and the English and Luganda voices loaded (a local `llama-server` plus the shared voice worker), which is setup B below made permanent. A headless run of the changed app over three of the recorded clips took 61–71 s per round trip, matching setup B (median 65.1 s), after a cold start-up of 111 s for Gemma and 26 s for the voices. The frozen per-tap version remains the baseline (setup A).
 
 Speech output was deliberately left unchanged so the comparison isolates the listening and translating stages. The small ONNX voice (`jq/vits-tts-lug-eng-onnx`) was tried and **not adopted**: its repository has no model card, the tokens are an IPA phoneme set, `espeak-ng` has no Luganda, and `sherpa-onnx` refused it ([experiments](#the-small-onnx-voice-not-adopted)).
 
@@ -81,8 +83,8 @@ Loading the English and Luganda voices into the worker takes about 26 s once at 
 
 **Method.** Six 5-second recordings of one speaker (three English, three Luganda; `scripts/fast/record_set.py`) went through each setup on the same Pi 4: English clips were translated into Luganda, Luganda clips into English, and the translation was spoken. `scripts/fast/bench_compare.py` timed the three stages identically in every setup, one setup per process so memory was freed between them, with the CPU cooled below 60 °C before each and an unscored warm-up run for the setups that stay loaded. Setups:
 
-- **A** the first app as it is (a new process per call, voice loaded per tap);
-- **B** the first app's model kept loaded in `llama-server` (prompt cache **off**, so repeated inputs are not flattered) with the English and Luganda voices preloaded;
+- **A** the first app as it was before it was changed to keep models loaded (a new process per call, voice loaded per tap; frozen in `scripts/baseline/sunflower_touch_ui_per_tap.py`, git tag `v1-first-app-per-tap`);
+- **B** the first app's model kept loaded in `llama-server` (this is what the first app now does) (prompt cache **off**, so repeated inputs are not flattered) with the English and Luganda voices preloaded;
 - **C-5s** the second app with a 5 s window; **C-tuned** with a 6 s window, no timestamp tokens and no repeated 3-grams passed in from outside; **C-final** the finished app with those as defaults plus the two guards.
 
 **Median per clip, seconds** (raw runs in `results/pi4-headtohead-2026-10-06/`):
@@ -132,6 +134,6 @@ Four Cortex-A53 cores at 1.5 GHz and 3.9 GB of memory, no passwordless `sudo`. W
 
 ## Reproduce
 
-`scripts/fast/` holds the app (`sunflower_fast_ui.py`), the translator (`nllb_translate.py`), the voice worker (`vits_worker.py`), the Whisper script (`stt_fw.py`) and a launcher template. Failed or side experiments are in `scripts/fast/experiments/`. The app expects `~/ml/pipeline2/` with `venv/` (faster-whisper, ctranslate2, transformers, sentencepiece, protobuf; `av<17` on the Pi because faster-whisper 1.2.1 fails with newer PyAV), `models/whisper-51-int8/` and `models/nllb-salt-ct2-int8/`. Models are never included. Verify copies with SHA-256: one 1.4 GB file was silently damaged on the same USB drive that damaged files before ([rebuild-from-scratch.md](rebuild-from-scratch.md)).
+`scripts/fast/` holds the app (`sunflower_fast_ui.py`), the translator (`nllb_translate.py`), the Whisper script (`stt_fw.py`) and a launcher template. Failed or side experiments are in `scripts/fast/experiments/`. The voice worker, `scripts/vits_worker.py`, is shared with the first app. The app expects `~/ml/pipeline2/` with `venv/` (faster-whisper, ctranslate2, transformers, sentencepiece, protobuf; `av<17` on the Pi because faster-whisper 1.2.1 fails with newer PyAV), `models/whisper-51-int8/` and `models/nllb-salt-ct2-int8/`. Models are never included. Verify copies with SHA-256: one 1.4 GB file was silently damaged on the same USB drive that damaged files before ([rebuild-from-scratch.md](rebuild-from-scratch.md)).
 
 **The benchmark.** `scripts/fast/record_set.py` records the six clips on the Pi; `bench_compare.py A|B|C` times one setup per run (`run_bench_all.sh` runs all four); `bench_summary.py` prints the medians, word error rates and tokens/s from the JSON lines in `results/`. The clips themselves (a person's voice) are not included.

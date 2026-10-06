@@ -1,28 +1,21 @@
 #!/usr/bin/env python3
 """
-Sunflower "fast pipeline" touchscreen app for the MHS-3.5" display (480x320).
-Same screens and voice output as sunflower_touch_ui.py, but with the other models:
-  speech -> text : Sunbird faster-whisper (Whisper large-v3 fine-tune), int8, 5 s window
-  translation    : Sunbird NLLB-1.3B (SALT), CTranslate2 int8
-  speech output  : Sunbird VITS / Meta MMS as in the first app; English and Luganda are
-                   kept loaded in a background worker, other languages load per tap
-Both models are loaded once at start-up; each stage's time is shown and logged.
+FROZEN COPY of the first app exactly as benchmarked (setup A in docs/06-fast-pipeline.md):
+Gemma is started as a new process on every tap and the voice is loaded per tap.
+bench_compare.py imports this file for setup A. Do not edit; the live app is
+scripts/sunflower_touch_ui.py (git tag v1-first-app-per-tap marks the same code).
 """
 
-import difflib
-import json
 import os
-import re
 import subprocess
-import sys
 import threading
-import time
 import tkinter as tk
 
 HOME = os.path.expanduser("~")
-PIPELINE2 = f"{HOME}/ml/pipeline2"
-WHISPER_DIR = f"{PIPELINE2}/models/whisper-51-int8"
-NLLB_DIR = f"{PIPELINE2}/models/nllb-salt-ct2-int8"
+LLAMA_CLI = f"{HOME}/ml/llama.cpp/build/bin/llama-cli"
+MTMD_CLI = f"{HOME}/ml/llama.cpp/build/bin/llama-mtmd-cli"
+TEXT_MODEL = f"{HOME}/ml/gguf/sunflower-gemma4-e2b-Q4_K_M.gguf"
+MMPROJ = f"{HOME}/ml/gguf/mmproj-sunflower-gemma4-e2b-f16.gguf"
 VITS_DIR = f"{HOME}/ml/vits-work/training"
 VITS_VENV_PY = f"{HOME}/ml/vits-venv/bin/python"
 TTS_VENV_PY = f"{HOME}/ml/tts-venv/bin/python"
@@ -31,26 +24,6 @@ MIC_DEVICE = "plughw:3,0"
 SPEAKER_DEVICE = "plughw:2,0"
 RECORD_SECONDS = 5
 MIC_GAIN_PERCENT = 62
-# Whisper normally pads every clip to 30 s, which is most of its cost on the Pi.
-# The app records RECORD_SECONDS and the encoder gets one second more: a window of exactly
-# the recording length made Whisper repeat sentences (see docs/06-fast-pipeline.md).
-# FAST_WINDOW=30 runs the stock window for comparison.
-WINDOW_SECONDS = float(os.environ.get("FAST_WINDOW", RECORD_SECONDS + 1))
-# Whisper decoding settings found on six recorded clips (docs/06-fast-pipeline.md): no timestamp
-# tokens and no repeated 3-grams, plus a cap on new tokens so a runaway loop cannot cost minutes.
-# Override with FAST_NO_TIMESTAMPS=0, FAST_NO_REPEAT=0, FAST_MAX_TOKENS=<n>.
-DECODE_OPTS = {"max_new_tokens": int(os.environ.get("FAST_MAX_TOKENS", "64"))}
-if os.environ.get("FAST_NO_TIMESTAMPS", "1") == "1":
-    DECODE_OPTS["without_timestamps"] = True
-if int(os.environ.get("FAST_NO_REPEAT", "3")) > 0:
-    DECODE_OPTS["no_repeat_ngram_size"] = int(os.environ.get("FAST_NO_REPEAT", "3"))
-LOG_PATH = f"{HOME}/ml/demo_scratch/fast_pipeline_log.jsonl"
-VITS_WORKER = f"{HOME}/ml/vits_worker.py"  # shared with the first app
-PRELOADED_VOICES = ("English", "Luganda")  # kept in memory by the worker
-
-# ISO 639-3 codes. NLLB (SALT) covers only these four; Swahili is transcribe-only here.
-ISO = {"English": "eng", "Luganda": "lug", "Runyankole": "nyn", "Acholi": "ach", "Swahili": "swh"}
-TRANSLATABLE = {"English", "Luganda", "Runyankole", "Acholi"}
 
 SCRATCH = f"{HOME}/ml/demo_scratch"
 os.makedirs(SCRATCH, exist_ok=True)
@@ -86,51 +59,59 @@ def play_audio(path):
     run(["aplay", "-D", SPEAKER_DEVICE, path])
 
 
-def collapse_repeats(text):
-    """Whisper on a short window sometimes says the sentence twice ("X. X."). Keep the first of
-    each run of near-identical sentences (only sentences of 3+ words are compared)."""
-    def norm(t):
-        return re.sub(r"[^\w\s']", "", t.lower()).strip()
-    kept = []
-    for part in (p for p in re.split(r"(?<=[.?!])\s+", text.strip()) if p):
-        if (kept and len(norm(part).split()) >= 3
-                and difflib.SequenceMatcher(None, norm(kept[-1]), norm(part)).ratio() >= 0.8):
+def llama_audio_understand(audio_path, instruction, n_predict=128, temp=0.3):
+    result = run([
+        MTMD_CLI, "-m", TEXT_MODEL, "--mmproj", MMPROJ,
+        "--audio", audio_path, "--jinja",
+        "-p", instruction, "-n", str(n_predict), "--temp", str(temp),
+    ])
+    if result.returncode != 0:
+        return None
+    reply = result.stdout.strip()
+    return reply if reply else None
+
+
+def transcribe_audio(audio_path, lang_name):
+    """Speech -> text in the speaker's own language (no translation)."""
+    instruction = (
+        f"The speaker is speaking {lang_name}. Transcribe exactly what they "
+        f"said, written in {lang_name}. Respond with only the transcription, "
+        f"nothing else."
+    )
+    return llama_audio_understand(audio_path, instruction)
+
+
+def _extract_reply(stdout, echoed_prompt):
+    """llama-cli prints a banner, then '> <prompt>', the reply, a blank line
+    and a '[ Prompt: ... ]' stats line. Return just the reply text."""
+    lines = stdout.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == f"> {echoed_prompt}".strip():
+            start = i
+            break
+    if start is None:
+        return None
+    reply = []
+    for line in lines[start + 1:]:
+        if line.strip().startswith("[ Prompt:") or not line.strip():
+            if reply:
+                break
             continue
-        kept.append(part)
-    return " ".join(kept)
+        reply.append(line.strip())
+    return " ".join(reply) if reply else None
 
 
-class Engine:
-    """Whisper (speech -> text) and NLLB (translation), loaded once and kept in memory."""
-
-    def __init__(self):
-        sys.path.insert(0, PIPELINE2)
-        import faster_whisper.transcribe as ft
-        from faster_whisper import WhisperModel
-        from nllb_translate import Translator
-
-        frames = int(WINDOW_SECONDS * 100)  # 100 mel frames per second
-        orig_pad = ft.pad_or_trim
-        ft.pad_or_trim = lambda arr, length=3000, **kw: orig_pad(arr, frames, **kw)
-        codes = json.load(open(f"{WHISPER_DIR}/language_map.json"))
-        self.whisper_code = {name: codes[iso if iso != "swh" else "swa"] for name, iso in ISO.items()}
-        self.whisper = WhisperModel(WHISPER_DIR, device="cpu", compute_type="int8", cpu_threads=4)
-        self.translator = Translator(NLLB_DIR)
-
-    def transcribe(self, audio_path, lang_name):
-        """Speech -> text in the speaker's own language (no translation)."""
-        segments, _ = self.whisper.transcribe(
-            audio_path, language=self.whisper_code[lang_name], beam_size=1,
-            condition_on_previous_text=False, **DECODE_OPTS)
-        segments = list(segments)  # decoding happens while iterating
-        self.last_tokens = sum(len(s.tokens) for s in segments)
-        self.last_raw = " ".join(s.text.strip() for s in segments).strip()
-        return collapse_repeats(self.last_raw)
-
-    def translate(self, text, src_name, dst_name):
-        out = self.translator.translate(" ".join(text.split()), ISO[src_name], ISO[dst_name])
-        self.last_tokens = self.translator.last_tokens
-        return out
+def translate_text(text, dst_name, n_predict=128, temp=0.3):
+    """Text -> text translation with the text-only model (fast: no audio encoder)."""
+    prompt = f"Translate to {dst_name}: " + " ".join(text.split())
+    result = run([
+        LLAMA_CLI, "-m", TEXT_MODEL, "-p", prompt,
+        "-n", str(n_predict), "--temp", str(temp), "--single-turn",
+    ])
+    if result.returncode != 0:
+        return None
+    return _extract_reply(result.stdout, prompt)
 
 
 def speak_text(text, lang_name, out_path):
@@ -160,35 +141,10 @@ print("ok")
         return result.returncode == 0 and "ok" in result.stdout
 
 
-class VitsWorker:
-    """Background process that keeps the Sunbird VITS voices loaded (see vits_worker.py)."""
-
-    def __init__(self, model_dirs):
-        self.lock = threading.Lock()
-        self.dirs = set(model_dirs)
-        self.proc = subprocess.Popen(
-            [VITS_VENV_PY, VITS_WORKER, *model_dirs], cwd=VITS_DIR, text=True, bufsize=1,
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=open(f"{SCRATCH}/vits_worker.log", "w"))
-        self.ready = self._read("READY")  # blocks until the voices are loaded
-
-    def _read(self, tag):
-        for line in self.proc.stdout:
-            if line.startswith(f"@@{tag} "):
-                return json.loads(line[len(tag) + 3:])
-        raise RuntimeError("VITS worker exited")
-
-    def speak(self, model_dir, text, out_path):
-        with self.lock:
-            self.proc.stdin.write(json.dumps({"dir": model_dir, "text": text, "out": out_path}) + "\n")
-            self.proc.stdin.flush()
-            return self._read("RESULT")
-
-
 class SunflowerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sunflower Translator (fast pipeline)")
+        self.root.title("Sunflower Translator")
         self.root.attributes("-fullscreen", True)
         self.root.configure(bg="#1a1a1a")
 
@@ -198,32 +154,6 @@ class SunflowerApp:
         self.busy = False
 
         self._build_ui()
-
-        self.engine = None
-        self.vits = None
-        self.last_voice = {}
-        self.last_counts = {}
-        self.busy = True
-        self.record_btn.config(state="disabled", bg="#555")
-        self.status_var.set("Loading models... (about 45 s)")
-        threading.Thread(target=self._load_engine, daemon=True).start()
-
-    def _load_engine(self):
-        t0 = time.perf_counter()
-        try:
-            self.engine = Engine()
-            self.set_status("Loading voices (English, Luganda)...")
-            try:
-                self.vits = VitsWorker([LANGUAGES[n]["dir"] for n in PRELOADED_VOICES])
-            except Exception as e:  # fall back to loading a voice on every tap
-                print("voice worker unavailable:", repr(e), flush=True)
-        except Exception as e:  # show the problem on screen instead of a silent dead app
-            self.set_status(f"Model load failed: {type(e).__name__}")
-            print("model load failed:", repr(e), flush=True)
-            return
-        self.busy = False
-        self.set_status(f"Ready (models loaded in {time.perf_counter() - t0:.0f} s)")
-        self.ui(lambda: self.record_btn.config(state="normal", bg="#ffaa28"))
 
     def _build_ui(self):
         # Sunbird AI brand colors (extracted from sunbird.ai stylesheet)
@@ -254,7 +184,7 @@ class SunflowerApp:
         flower = load_logo("sunflower-icon-24.png")
         if flower:
             tk.Label(title_bar, image=flower, bg=BG).pack(side="left", padx=(10, 4))
-        tk.Label(title_bar, text="Sunflower Fast", bg=BG, fg=ORANGE,
+        tk.Label(title_bar, text="Sunflower", bg=BG, fg=ORANGE,
                  font=("DejaVu Sans", 14, "bold")).pack(side="left", padx=(0 if flower else 10, 0))
 
         # The touch panel doesn't register the outer ~25px, so keep the quit
@@ -431,14 +361,8 @@ class SunflowerApp:
         ).start()
 
     def _run_pipeline(self, mode, src, dst):
-        times, heard, translated = {}, "", ""
-        self.last_voice = {}
-        self.last_counts = {}
         try:
             self.ui(self._show_texts, "", "", "", "")
-            if mode == "Translate" and (src not in TRANSLATABLE or dst not in TRANSLATABLE):
-                self.set_status("Swahili isn't covered by the translation model. Use Transcribe.")
-                return
 
             self.set_status(f"Recording... ({RECORD_SECONDS}s) - speak now")
             audio_path = f"{SCRATCH}/ui_input.wav"
@@ -447,83 +371,40 @@ class SunflowerApp:
                 return
 
             # Step 1: speech -> text in the speaker's own language.
-            self.set_status(f"Listening ({src})...")
-            t0 = time.perf_counter()
-            heard = self.engine.transcribe(audio_path, src)
-            times["Listen"] = time.perf_counter() - t0
-            self.last_counts["listen_tokens"] = self.engine.last_tokens
-            if self.engine.last_raw != heard:
-                self.last_counts["heard_raw"] = self.engine.last_raw
+            self.set_status(f"Listening ({src})... first run can take ~2 min")
+            heard = transcribe_audio(audio_path, src)
             if not heard:
                 self.set_status("Couldn't make out any speech.")
                 return
             self.ui(self._show_texts, f"Heard ({src}):", heard, "", "")
 
             if mode == "Transcribe":
-                self.set_status(self._summary(times))
+                self.set_status("Ready")
                 return
 
             # Step 2: text -> translation (skipped if source == target language).
             if src == dst:
                 translated = heard
             else:
-                self.set_status(f"Translating to {dst}...  ({self._summary(times)})")
-                t0 = time.perf_counter()
-                translated = self.engine.translate(heard, src, dst)
-                times["Translate"] = time.perf_counter() - t0
-                self.last_counts["translate_tokens"] = self.engine.last_tokens
+                self.set_status(f"Translating to {dst}...")
+                translated = translate_text(heard, dst)
                 if not translated:
                     self.set_status("Translation failed.")
                     return
             self.ui(self._show_texts, f"Heard ({src}):", heard,
                     f"Translation ({dst}):", translated)
 
-            # Step 3: speak the translation (same voices as the first app).
-            self.set_status(f"Speaking ({dst})...  ({self._summary(times)})")
-            t0 = time.perf_counter()
+            # Step 3: speak the translation.
+            self.set_status(f"Speaking ({dst})...")
             out_path = f"{SCRATCH}/ui_output.wav"
-            ok = self._speak(translated, dst, out_path)
-            times["Voice"] = time.perf_counter() - t0
-            if ok:
+            if speak_text(translated, dst, out_path):
                 play_audio(out_path)
-                self.set_status(self._summary(times))
+                self.set_status("Ready")
             else:
                 self.set_status("Speech synthesis failed.")
         finally:
-            self._log(mode, src, dst, times, heard, translated)
             self.busy = False
             self.ui(lambda: self.record_btn.config(state="normal", bg="#ffaa28"))
-
-    def _speak(self, text, lang_name, out_path):
-        """Use the preloaded worker for English/Luganda; otherwise (or on error) load per tap."""
-        if self.vits and lang_name in PRELOADED_VOICES:
-            try:
-                res = self.vits.speak(LANGUAGES[lang_name]["dir"], text, out_path)
-                self.last_voice = {"path": "worker", **res}
-                if res.get("ok"):
-                    return True
-            except Exception as e:
-                self.last_voice = {"path": "worker", "ok": False, "error": repr(e)[:150]}
-        self.last_voice.setdefault("path", "per-tap")
-        return speak_text(text, lang_name, out_path)
-
-    @staticmethod
-    def _summary(times):
-        total = sum(times.values())
-        return "Done: " + " | ".join(f"{k} {v:.1f}s" for k, v in times.items()) + f" | total {total:.1f}s"
-
-    def _log(self, mode, src, dst, times, heard, translated):
-        """One JSON line per run, so the two pipelines can be compared afterwards."""
-        try:
-            with open(LOG_PATH, "a") as f:
-                f.write(json.dumps({
-                    "time": time.strftime("%Y-%m-%d %H:%M:%S"), "pipeline": "whisper+nllb",
-                    "window_s": WINDOW_SECONDS, "decode_opts": DECODE_OPTS, "mode": mode, "src": src, "dst": dst,
-                    "seconds": {k: round(v, 2) for k, v in times.items()},
-                    "voice": self.last_voice, "tokens": self.last_counts,
-                    "heard": heard, "translated": translated}, ensure_ascii=False) + "\n")
-        except OSError:
-            pass
 
 
 if __name__ == "__main__":

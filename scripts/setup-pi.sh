@@ -20,7 +20,7 @@
 #   ~/ml/models/tts-vits-{lug,eng,nyn}/{config.json,vocab.txt,G_*.pth}
 #   ~/ml/models/mms-tts-{swh,ach,lug,eng,nyn}/        (offline MMS voices)
 #   ~/ml/vits-work/                                    (SunbirdAI/vits checkout)
-#   ~/ml/sunflower_touch_ui.py, sunflower_demo.py, assets/
+#   ~/ml/sunflower_touch_ui.py, sunflower_demo.py, vits_worker.py, assets/
 set -eu
 
 HERE="$(cd "$(dirname "$0")" && pwd)"

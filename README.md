@@ -32,9 +32,9 @@ Measured on a Raspberry Pi 4 Model B (8 GB), CPU only. Mostly **single runs** on
 | Quantization level | Q4_K_M compared with seven other levels: **no detectable translation-quality loss** against the unquantized model and no broken outputs; higher levels were 20–40% slower on the Pi ([details](docs/quantization-sweep.md)) |
 | Text generation (Q4_K_M) | ~2.45 tokens/s generation, ~6.0 prompt (3-repetition benchmark, ±0.02) |
 | Memory during audio + text inference | system memory in use peaked at ~2.6 GB of 7.6 GB, excluding cached file pages (≈0.75 GB of that is idle baseline); the text model process's peak resident memory, including its mapped file, is ~3.5 GB |
-| Speech → transcript | **~78 s** for a 5 s recording (median of five runs; ~2.5 min on the first call after a cold start). An earlier figure of ~30 s came from a clip about a second long |
-| Transcript → translation | ~21 s (median of six runs; ~18 s was measured earlier on a short sentence) |
-| Whole spoken round trip | **~2 min** (median 121 s over six clips; see [Part 6](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips) for the faster second pipeline) |
+| Speech → transcript | **~78 s** for a 5 s recording in the original version, which started Gemma afresh on every tap (median of five runs; an earlier ~30 s came from a clip about a second long). **~44 s** now that the app keeps Gemma loaded |
+| Transcript → translation | ~21 s originally (median of six runs), **~12 s** with Gemma kept loaded |
+| Whole spoken round trip | **~2 min** originally (median 121 s over six clips), **~65 s** now (first app, models kept loaded; start-up 1–2 min), **~41 s** with the second app, Sunflower Fast, which uses Whisper + NLLB ([Part 6](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips)) |
 | Speech synthesis | ~3–4.5× slower than real time |
 
 ### What to expect
@@ -45,7 +45,7 @@ The model card's own evaluation (full-precision weights; not re-measured for our
 
 | | |
 |---|---|
-| **[Key findings](docs/findings.md)** | The 24 non-obvious lessons, one page |
+| **[Key findings](docs/findings.md)** | The 32 non-obvious lessons, one page |
 | [Part 1: text model](docs/01-text-model.md) | Convert, quantize, deploy (Steps 1–10) |
 | [Part 2: audio input](docs/02-audio-input.md) | Speech understanding via llama.cpp's multimodal projector (Steps 11–13) |
 | [Part 3: text-to-speech](docs/03-text-to-speech.md) | Three TTS approaches tried; two kept (Steps 14–18) |
@@ -63,7 +63,8 @@ The model card's own evaluation (full-precision weights; not re-measured for our
 Assumes the layout used throughout the docs (`~/ml/...`) on a Pi, after completing Parts 1–3 to produce the model files and TTS environments. To rebuild a Pi on a blank card instead, see [Rebuilding from scratch](docs/rebuild-from-scratch.md) and `scripts/setup-pi.sh` (**not yet run end to end on a blank card**; it automates the steps that were done by hand). Model files are never included.
 
 ```bash
-python3 scripts/sunflower_touch_ui.py   # 480x320 touchscreen app
+python3 scripts/sunflower_touch_ui.py   # 480x320 touchscreen app (Gemma kept loaded; start-up 1-2 min)
+scripts/fast/sunflower_fast_ui.py       # second app, Whisper + NLLB (see Part 6; needs its own Python environment)
 python3 scripts/sunflower_demo.py       # terminal menu (text/speech, in/out)
 ```
 
@@ -75,7 +76,9 @@ The touchscreen app's title bar uses Sunbird's logos, which are **not** in this 
 README.md          this page
 docs/              the write-up, split by part
 scripts/
-  sunflower_touch_ui.py     touchscreen app (Translate / Transcribe)
+  sunflower_touch_ui.py     touchscreen app (Translate / Transcribe); Gemma and two voices kept loaded
+  vits_worker.py            background voice synthesizer shared by both touchscreen apps
+  baseline/                 frozen copy of the first app as originally benchmarked (Gemma started per tap)
   sunflower_demo.py         terminal menu version
   vits_run_inference.py     CPU inference for Sunbird VITS checkpoints
   touch_test.py             draws a marker where each touch lands (for calibration)
