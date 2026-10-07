@@ -85,13 +85,13 @@ def mem_available_gb():
 class GemmaServer:
     """llama-server holding Gemma and its audio encoder in memory; one request per stage."""
 
-    def __init__(self):
+    def __init__(self, ctx=2048):
         self.url = f"http://127.0.0.1:{SERVER_PORT}"
         self.proc = None
-        if not self._healthy():  # reuse a server that is already running
+        if not self._healthy():  # reuse a server that is already running (whoever started it stops it)
             self.proc = subprocess.Popen(
                 [LLAMA_SERVER, "-m", TEXT_MODEL, "--mmproj", MMPROJ, "--jinja",
-                 "--host", "127.0.0.1", "--port", str(SERVER_PORT), "-c", "2048", "-t", "4"],
+                 "--host", "127.0.0.1", "--port", str(SERVER_PORT), "-c", str(ctx), "-t", "4"],
                 stdout=open(f"{SCRATCH}/llama_server.log", "w"), stderr=subprocess.STDOUT)
             atexit.register(self.close)
             deadline = time.time() + 600
@@ -116,6 +116,25 @@ class GemmaServer:
                                      {"Content-Type": "application/json"})
         out = json.load(urllib.request.urlopen(req, timeout=900))
         return out["choices"][0]["message"]["content"].strip()
+
+    def stream_chat(self, messages, max_tokens=200, temp=0.6):
+        """Multi-turn chat: yields the reply piece by piece as the model generates it.
+        The prompt cache stays on so earlier turns are not reprocessed."""
+        body = json.dumps({"messages": messages, "max_tokens": max_tokens, "temperature": temp,
+                           "stream": True, "cache_prompt": True}).encode()
+        req = urllib.request.Request(self.url + "/v1/chat/completions", body,
+                                     {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=900) as resp:
+            for raw in resp:
+                line = raw.decode("utf-8", "replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                piece = json.loads(data)["choices"][0].get("delta", {}).get("content")
+                if piece:
+                    yield piece
 
     def transcribe(self, audio_path, lang_name):
         """Speech -> text in the speaker's own language (no translation)."""
