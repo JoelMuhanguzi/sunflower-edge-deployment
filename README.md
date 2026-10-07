@@ -33,7 +33,7 @@ This repository is a reproducible **log of how that was done**, including the de
 
 ## Results at a glance
 
-Measured on a Raspberry Pi 4 Model B (8 GB), CPU only, with heatsinks and fans. The headline comparison uses **six 5-second recordings of one speaker** (three English, three Luganda) put through each setup in the same way, with the CPU cooled before each run; figures are medians in seconds ([method and raw results](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips)).
+Measured on a Raspberry Pi 4 Model B (8 GB), CPU only, with heatsinks and fans. The headline comparison uses **six 5-second recordings of one speaker** (three English, three Luganda) put through each setup in the same way, with the benchmark waiting up to 15 minutes for the CPU to fall below 60 °C before each setup (per-clip start temperatures were 48–79 °C, so some runs were warm); figures are medians in seconds ([method and raw results](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips)).
 
 | Setup | Listen | Translate | Voice | **Spoken round trip** | Start-up |
 |---|---|---|---|---|---|
@@ -127,3 +127,7 @@ scripts/
 - [Spark-TTS](https://github.com/SparkAudio/Spark-TTS)
 - Google's [gemma-translator](https://github.com/google-gemma/gemma-translator) reference project
 - [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM) and [litert-torch](https://github.com/google-ai-edge/litert-torch) (formerly ai-edge-torch)
+
+## License
+
+The code and documentation in this repository are released under the [MIT License](LICENSE). The models it uses (Sunflower/Gemma, Sunbird Whisper, NLLB, VITS, MMS-TTS) are not part of this repository and keep their own licenses; check each model's page before reuse. The NLLB base model is published under CC-BY-NC.

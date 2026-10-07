@@ -9,7 +9,7 @@ Apart from the [pipeline comparison](#comparing-the-two-pipelines-part-6) just b
 
 ### Comparing the two pipelines (Part 6)
 
-Full method, caveats and raw data: [Part 6](06-fast-pipeline.md) and `results/pi4-headtohead-2026-10-06/`. The first pipeline (Gemma for listening and translating) is compared with the second (Whisper for listening, NLLB for translating) on the Pi 4, with the same six recorded 5 s clips (three English, three Luganda; one speaker) and identical stage timing. Medians in seconds; the CPU was cooled below 60 °C before each setup.
+Full method, caveats and raw data: [Part 6](06-fast-pipeline.md) and `results/pi4-headtohead-2026-10-06/`. The first pipeline (Gemma for listening and translating) is compared with the second (Whisper for listening, NLLB for translating) on the Pi 4, with the same six recorded 5 s clips (three English, three Luganda; one speaker) and identical stage timing. Medians in seconds; the benchmark waited up to 15 minutes for the CPU to fall below 60 °C before each setup, but per-clip start temperatures were 48–79 °C, so some runs were warm.
 
 **Spoken round trip on the Pi 4**
 

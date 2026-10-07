@@ -1,0 +1,16 @@
+=== Q8_0
+llama_model_quantize_impl: model size  =  8828.84 MiB (16.00 BPW)
+llama_model_quantize_impl: quant size  =  4703.14 MiB (8.52 BPW)
+real 15.99
+=== Q6_K
+llama_model_quantize_impl: model size  =  8828.84 MiB (16.00 BPW)
+llama_model_quantize_impl: quant size  =  3637.33 MiB (6.59 BPW)
+real 35.69
+=== Q5_K_M
+llama_model_quantize_impl: model size  =  8828.84 MiB (16.00 BPW)
+llama_model_quantize_impl: quant size  =  3434.08 MiB (6.22 BPW)
+real 38.45
+=== Q4_0
+llama_model_quantize_impl: model size  =  8828.84 MiB (16.00 BPW)
+llama_model_quantize_impl: quant size  =  3179.26 MiB (5.76 BPW)
+real 24.71

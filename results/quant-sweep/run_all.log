@@ -1,0 +1,13 @@
+[13:44:25] start f16
+f16: 200 sentences in 144s (4 parallel requests; not a speed benchmark)
+[13:46:54] start Q8_0
+Q8_0: 200 sentences in 111s (4 parallel requests; not a speed benchmark)
+[13:48:49] start Q6_K
+Q6_K: 200 sentences in 150s (4 parallel requests; not a speed benchmark)
+[13:51:22] start Q5_K_M
+Q5_K_M: 200 sentences in 153s (4 parallel requests; not a speed benchmark)
+[13:53:58] start Q4_K_M
+Q4_K_M: 200 sentences in 135s (4 parallel requests; not a speed benchmark)
+[13:56:16] start Q4_0
+Q4_0: 200 sentences in 143s (4 parallel requests; not a speed benchmark)
+[13:58:43] ALL DONE

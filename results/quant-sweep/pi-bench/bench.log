@@ -1,0 +1,11 @@
+pi: Raspberry Pi 4 Model B Rev 1.5
+kernel: 6.18.50+rpt-rpi-v8  llama.cpp: a7b94df
+=== Q4_0  start 21:40:25  temp temp=45.7'C  throttled throttled=0x0
+=== Q4_0  done  21:43:08  temp temp=65.2'C  throttled throttled=0x0  peak_rss_kb 3404100
+=== Q4_K_M  start 21:43:08  temp temp=65.2'C  throttled throttled=0x0
+=== Q4_K_M  done  21:44:34  temp temp=69.1'C  throttled throttled=0x0  peak_rss_kb 3469072
+=== Q5_K_M  start 21:44:34  temp temp=69.1'C  throttled throttled=0x0
+=== Q5_K_M  done  21:47:43  temp temp=67.6'C  throttled throttled=0x0  peak_rss_kb 3664992
+=== Q6_K  start 21:47:43  temp temp=67.6'C  throttled throttled=0x0
+=== Q6_K  done  21:51:01  temp temp=68.6'C  throttled throttled=0x0  peak_rss_kb 3873180
+BENCH-ALL-DONE
