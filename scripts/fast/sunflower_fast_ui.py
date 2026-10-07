@@ -4,8 +4,8 @@ Sunflower "fast pipeline" touchscreen app for the MHS-3.5" display (480x320).
 Same screens and voice output as sunflower_touch_ui.py, but with the other models:
   speech -> text : Sunbird faster-whisper (Whisper large-v3 fine-tune), int8, 5 s window
   translation    : Sunbird NLLB-1.3B (SALT), CTranslate2 int8
-  speech output  : Sunbird VITS / Meta MMS as in the first app; English and Luganda are
-                   kept loaded in a background worker, other languages load per tap
+  speech output  : English and Luganda: a character-level ONNX voice kept loaded in the app (FAST_VOICE=vits
+                   for the Sunbird VITS worker); other languages load Sunbird VITS / Meta MMS per tap
 Both models are loaded once at start-up; each stage's time is shown and logged.
 """
 
@@ -47,6 +47,12 @@ if int(os.environ.get("FAST_NO_REPEAT", "3")) > 0:
 LOG_PATH = f"{HOME}/ml/demo_scratch/fast_pipeline_log.jsonl"
 VITS_WORKER = f"{HOME}/ml/vits_worker.py"  # shared with the first app
 PRELOADED_VOICES = ("English", "Luganda")  # kept in memory by the worker
+# Character-level ONNX voice (jq/sherpa-vits-tts-lug-eng, as in the Sunbird app): one 109 MB model for
+# English and Luganda, about 2x real time on the Pi 4 against 2.6-3.7x for the Sunbird VITS voices.
+# FAST_VOICE=vits goes back to the Sunbird VITS worker for English and Luganda.
+CHAR_VOICE_DIR = f"{PIPELINE2}/models/sherpa-vits-lug-eng"
+CHAR_VOICE_LANGS = ("English", "Luganda")
+USE_CHAR_VOICE = os.environ.get("FAST_VOICE", "onnx") == "onnx"
 
 # ISO 639-3 codes. NLLB (SALT) covers only these four; Swahili is transcribe-only here.
 ISO = {"English": "eng", "Luganda": "lug", "Runyankole": "nyn", "Acholi": "ach", "Swahili": "swh"}
@@ -160,6 +166,56 @@ print("ok")
         return result.returncode == 0 and "ok" in result.stdout
 
 
+class CharVoice:
+    """In-process ONNX voice that reads plain characters (recipe from SunbirdAI/sunflower-app tts_engine.dart):
+    lowercase the text, one token id per character, no blanks, scales [0.667, 1.0, 0.8], 22050 Hz."""
+    RATE = 22050
+    SCALES = (0.667, 1.0, 0.8)
+    CHUNK_WORDS = 10
+
+    def __init__(self, model_dir=CHAR_VOICE_DIR):
+        import numpy as np
+        import onnxruntime as ort
+        self.np = np
+        self.tok = {}
+        for line in open(f"{model_dir}/tokens.txt", encoding="utf8"):
+            line = line.rstrip("\n")
+            if line:
+                sym, _, idx = line.rpartition(" ")
+                self.tok[sym or " "] = int(idx)
+        opts = ort.SessionOptions()
+        opts.intra_op_num_threads = 4
+        self.sess = ort.InferenceSession(f"{model_dir}/vits-lug-eng.fp32.onnx", opts,
+                                         providers=["CPUExecutionProvider"])
+
+    def _chunks(self, text):
+        out = []
+        for part in re.split(r"[.,!?;:]", text.lower()):
+            words = part.split()
+            out += [" ".join(words[i:i + self.CHUNK_WORDS]) for i in range(0, len(words), self.CHUNK_WORDS)]
+        return out
+
+    def speak(self, text, out_path):
+        np = self.np
+        t0 = time.perf_counter()
+        pieces = []
+        for chunk in self._chunks(text):
+            ids = [self.tok[c] for c in chunk if c in self.tok]
+            if not ids:
+                continue
+            audio = self.sess.run(None, {
+                "input": np.array([ids], dtype=np.int64),
+                "input_lengths": np.array([len(ids)], dtype=np.int64),
+                "scales": np.array(self.SCALES, dtype=np.float32)})[0].squeeze()
+            pieces += [audio, np.zeros(int(self.RATE * 0.15), dtype=audio.dtype)]
+        if not pieces:
+            return {"ok": False, "error": "no known characters"}
+        audio = np.concatenate(pieces)
+        from scipy.io import wavfile
+        wavfile.write(out_path, self.RATE, (np.clip(audio, -1, 1) * 32767).astype(np.int16))
+        return {"ok": True, "synth_s": round(time.perf_counter() - t0, 2), "audio_s": round(len(audio) / self.RATE, 2)}
+
+
 class VitsWorker:
     """Background process that keeps the Sunbird VITS voices loaded (see vits_worker.py)."""
 
@@ -201,6 +257,7 @@ class SunflowerApp:
 
         self.engine = None
         self.vits = None
+        self.char_voice = None
         self.last_voice = {}
         self.last_counts = {}
         self.busy = True
@@ -213,10 +270,16 @@ class SunflowerApp:
         try:
             self.engine = Engine()
             self.set_status("Loading voices (English, Luganda)...")
-            try:
-                self.vits = VitsWorker([LANGUAGES[n]["dir"] for n in PRELOADED_VOICES])
-            except Exception as e:  # fall back to loading a voice on every tap
-                print("voice worker unavailable:", repr(e), flush=True)
+            if USE_CHAR_VOICE:
+                try:
+                    self.char_voice = CharVoice()
+                except Exception as e:  # fall back to the Sunbird VITS worker
+                    print("ONNX voice unavailable:", repr(e), flush=True)
+            if self.char_voice is None:
+                try:
+                    self.vits = VitsWorker([LANGUAGES[n]["dir"] for n in PRELOADED_VOICES])
+                except Exception as e:  # fall back to loading a voice on every tap
+                    print("voice worker unavailable:", repr(e), flush=True)
         except Exception as e:  # show the problem on screen instead of a silent dead app
             self.set_status(f"Model load failed: {type(e).__name__}")
             print("model load failed:", repr(e), flush=True)
@@ -495,7 +558,15 @@ class SunflowerApp:
             self.ui(lambda: self.record_btn.config(state="normal", bg="#ffaa28"))
 
     def _speak(self, text, lang_name, out_path):
-        """Use the preloaded worker for English/Luganda; otherwise (or on error) load per tap."""
+        """Use the ONNX voice (or the preloaded worker) for English/Luganda; otherwise (or on error) load per tap."""
+        if self.char_voice and lang_name in CHAR_VOICE_LANGS:
+            try:
+                res = self.char_voice.speak(text, out_path)
+                self.last_voice = {"path": "onnx", **res}
+                if res.get("ok"):
+                    return True
+            except Exception as e:
+                self.last_voice = {"path": "onnx", "ok": False, "error": repr(e)[:150]}
         if self.vits and lang_name in PRELOADED_VOICES:
             try:
                 res = self.vits.speak(LANGUAGES[lang_name]["dir"], text, out_path)

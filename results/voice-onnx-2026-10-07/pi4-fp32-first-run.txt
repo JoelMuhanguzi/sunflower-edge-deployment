@@ -1,0 +1,7 @@
+start temp=56.4'C free: 7529 MB
+load: 3.21s
+eng 5 words, 1.5s audio: 2.94s, 3.11s, 3.21s  (first 2.94s = 1.91x real time)
+eng 14 words, 3.8s audio: 7.40s, 6.76s, 7.71s  (first 7.40s = 1.95x real time)
+lug 5 words, 2.1s audio: 4.31s, 4.97s, 4.40s  (first 4.31s = 2.02x real time)
+lug 10 words, 2.9s audio: 6.73s, 7.36s, 6.00s  (first 6.73s = 2.32x real time)
+end temp=79.8'C throttled=0xf0000

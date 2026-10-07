@@ -6,6 +6,7 @@
   A  first app as it was (frozen copy sunflower_touch_ui_per_tap.py): Gemma (llama-mtmd-cli / llama-cli, new process per call) + VITS per call
   B  first app, loaded:    Gemma in a persistent llama-server (prompt cache OFF) + preloaded voices
   C  second app:           Whisper int8 (5 s window) + NLLB int8, loaded once + preloaded voices
+  D  C with the character-level ONNX voice (jq/sherpa-vits-tts-lug-eng) for English and Luganda
 
 Each clip is spoken in English or Luganda and translated into the other one, then spoken.
 Stages are timed identically in every setup: listen, translate, voice. One setup per
@@ -26,7 +27,7 @@ sys.path.insert(0, f"{HOME}/ml")
 sys.path.insert(0, f"{HOME}/ml/pipeline2")
 
 ap = argparse.ArgumentParser()
-ap.add_argument("config", choices=["A", "B", "C"])
+ap.add_argument("config", choices=["A", "B", "C", "D"])
 ap.add_argument("--clips", default=f"{HOME}/ml/bench_clips/clips.json")
 ap.add_argument("--repeat", type=int, default=1)
 ap.add_argument("--label", default=None, help="name for the result file (default: the config letter)")
@@ -198,12 +199,29 @@ class SetupC(VoiceWorkerMixin):
         self.vits.proc.terminate()
 
 
+class SetupD(SetupC):
+    """Setup C with the in-process character-level ONNX voice instead of the Sunbird VITS worker."""
+
+    def start_voices(self):
+        import sunflower_fast_ui as fast
+        t0 = time.time()
+        self.cv = fast.CharVoice()
+        return time.time() - t0
+
+    def speak(self, text, dst):
+        res = self.cv.speak(text, WAV_OUT)
+        return bool(res.get("ok")), {"path": "onnx", **res}
+
+    def close(self):
+        pass
+
+
 # ---------------------------------------------------------------- run
 clips = json.load(open(args.clips))
 waited = wait_cool()
 print(f"config {args.config}: waited {waited}s for cooldown, CPU {cpu_temp():.0f} C, flags {throttled()}", flush=True)
 t0 = time.time()
-setup = {"A": SetupA, "B": SetupB, "C": SetupC}[args.config]()
+setup = {"A": SetupA, "B": SetupB, "C": SetupC, "D": SetupD}[args.config]()
 print(f"setup ready: startup {setup.startup:.1f}s (models/voices loaded once; 0 for A)", flush=True)
 
 plan = []

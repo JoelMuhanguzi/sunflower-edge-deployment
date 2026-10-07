@@ -1,0 +1,7 @@
+setup,clips,listen_s,translate_s,voice_s,total_s,slowest_total_s,startup_s,cpu_start_temp_c_min,cpu_start_temp_c_max,source
+A,6,78.8,21.3,24.1,121.6,200.5,0.0,55,78,results/pi4-headtohead-2026-10-06/A_20261006_184040.jsonl
+B,6,43.6,12.4,9.6,65.1,70.8,56.5,72,79,results/pi4-headtohead-2026-10-06/B_20261006_185414.jsonl
+C-5s,6,27.0,15.0,13.5,56.2,335.7,95.9,64,72,results/pi4-headtohead-2026-10-06/C-5s_20261006_190323.jsonl
+C-tuned,6,19.8,11.6,10.1,42.6,45.2,107.2,63,72,results/pi4-headtohead-2026-10-06/C-tuned_20261006_191610.jsonl
+C-final,6,19.3,10.7,9.9,40.8,43.5,102.2,58,70,results/pi4-headtohead-2026-10-06/C-final_20261006_194956.jsonl
+D,6,20.6,11.7,7.1,40.8,47.4,83.1,73,84,results/pi4-headtohead-2026-10-06/D-onnx-voice_20261007_113719.jsonl

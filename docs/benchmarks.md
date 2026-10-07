@@ -9,7 +9,7 @@ Apart from the [pipeline comparison](#comparing-the-two-pipelines-part-6) just b
 
 ### Comparing the two pipelines (Part 6)
 
-Full method, caveats and raw data: [Part 6](06-fast-pipeline.md) and `results/pi4-headtohead-2026-10-06/`. The first pipeline (Gemma for listening and translating) is compared with the second (Whisper for listening, NLLB for translating) on the Pi 4, with the same six recorded 5 s clips (three English, three Luganda; one speaker) and identical stage timing. Medians in seconds; the benchmark waited up to 15 minutes for the CPU to fall below 60 °C before each setup, but per-clip start temperatures were 48–79 °C, so some runs were warm.
+Full method, caveats and raw data: [Part 6](06-fast-pipeline.md) and `results/pi4-headtohead-2026-10-06/`. The first pipeline (Gemma for listening and translating) is compared with the second (Whisper for listening, NLLB for translating) on the Pi 4, with the same six recorded 5 s clips (three English, three Luganda; one speaker) and identical stage timing. Medians in seconds; the benchmark waited up to 15 minutes for the CPU to fall below 60 °C before each setup, but per-clip start temperatures were 48–79 °C for setups A to C-final, so some runs were warm.
 
 **Spoken round trip on the Pi 4**
 
@@ -28,7 +28,7 @@ The first app after the change took 61–71 s on three of the clips in a headles
 | | First pipeline | Second pipeline |
 |---|---|---|
 | Listening and translating models on disk | Gemma4-E2B Q4_K_M 3.42 GB + audio encoder 0.99 GB = **4.41 GB** | Whisper int8 1.56 GB + NLLB int8 1.38 GB = **2.94 GB** |
-| Voices (same in both) | Sunbird VITS English 145 MB, Luganda 450 MB, Runyankole ~450 MB; MMS-TTS 139 MB each | same |
+| Voices (same in both apps) | Sunbird VITS English 145 MB, Luganda 450 MB, Runyankole ~450 MB; MMS-TTS 139 MB each | same; the second app now uses the character-level ONNX voice (109 MB, English and Luganda) in place of the English and Luganda VITS voices |
 | Memory in use, kept loaded | ~4.3 GB resident in the server (includes the mapped model file) | 3.9 GB with Whisper and NLLB; 4.6 GB after a run with the voices |
 | Generation speed | 2.40–2.47 tokens/s (setups A and B; `llama-bench`: 2.45) | not comparable: Whisper 0.7 and NLLB 1.0 tokens/s end to end including encoder and beam search |
 | Languages | Sunflower's 69 | transcription as Gemma's; translation limited to eng, ach, lgg, lug, nyn, teo (**no Swahili**) |
@@ -59,7 +59,18 @@ The first app after the change took 61–71 s on three of the clips in a headles
 | Preloaded worker (inside the app) | 15.4 s |
 | Within the six-clip benchmark | 5.7–11.8 s for 2.0–4.4 s of speech, about 2.6–3.7× the audio length |
 
-The small ONNX voice (`jq/vits-tts-lug-eng-onnx`) ran but its output was never confirmed to be speech: Pi 4 float32 1.9–2.6 s per sentence, int8 7.6–9.9 s; Orange Pi float32 3.0–7.0 s, int8 18–29 s; Mac float32 0.1–0.2 s, int8 0.8–1.2 s. It was not adopted.
+**Character-level ONNX voice** (`jq/sherpa-vits-tts-lug-eng`, one model for English and Luganda; method and caveats in [Part 6](06-fast-pipeline.md#a-faster-voice-a-character-level-onnx-model)). Synthesis time on the Pi 4, three runs per sentence, CPU below 60 °C at the start:
+
+| Sentence | Audio | fp32 (109 MB) | int8 (38 MB) |
+|---|---|---|---|
+| English, 5 words | 1.4 s | 3.2, 3.0, 2.8 s | 14.9, 12.7, 12.0 s |
+| English, 14 words | 3.6 s | 7.2, 6.6, 7.3 s | 33.8, 31.0, 31.5 s |
+| Luganda, 5 words | 2.3 s | 5.6, 4.6, 5.0 s | 20.1, 19.9, 20.9 s |
+| Luganda, 10 words | 3.8 s | 7.4, 7.2, 8.4 s | 33.4, 31.3, 25.3 s |
+
+fp32 is about 2× real time against 2.6–3.7× for the Sunbird VITS voices; int8 is four to five times slower than fp32 and not recommended. Load time 3.0 s (fp32) and 3.8 s (int8). Mac: fp32 0.70 s (English) and 0.41 s (Luganda), int8 1.27 s and 1.71 s. Inside the second app (setup D, a hot CPU) the voice step's median was 7.1 s against 9.9 s for the Sunbird VITS voices.
+
+The other ONNX repository, `jq/vits-tts-lug-eng-onnx`, holds an IPA-phoneme model that cannot be fed plain text; timings reported for it in earlier versions of this page were measured on output that was not speech and have been removed.
 
 ### Text generation (Gemma4-E2B, Q4_K_M)
 

@@ -5,7 +5,7 @@ A working prototype that translates speech between English and African languages
 Two pipelines were built and compared on the same device:
 
 - **The first app, "Sunflower"** uses one model, [Sunbird AI's Sunflower-Gemma4-E2B](https://huggingface.co/Sunbird/Sunflower-Gemma4-E2B) (a Gemma 4–based model for 69 African languages), for both listening and translating (Parts 1–5).
-- **The second app, "Sunflower Fast"** swaps that for Sunbird's smaller specialist models, a Whisper-based speech recogniser and an NLLB translator, kept loaded in memory. On the Pi 4 it took **a median 41 s per spoken round trip against 122 s** for the first app as originally built (Part 6).
+- **The second app, "Sunflower Fast"** swaps that for Sunbird's smaller specialist models, a Whisper-based speech recogniser and an NLLB translator, kept loaded in memory, and speaks English and Luganda with a small character-level ONNX voice. On the Pi 4 it took **a median 41 s per spoken round trip against 122 s** for the first app as originally built (Part 6).
 - **A third app, "Sunflower Chat"**, is for conversation with Gemma: speak or type a question and read the reply as it streams in (Part 7).
 
 This repository is a reproducible **log of how that was done**, including the dead ends. The Gemma repository ships only a 10 GB full-precision checkpoint, so much of the work was quantizing it, adding audio input and speech output, and making it usable on a small touchscreen. Part 6 then asked whether the specialist models do better and measured both pipelines on the same recordings.
@@ -28,18 +28,20 @@ This repository is a reproducible **log of how that was done**, including the de
  Second app (Sunflower Fast)                                                                              │
    USB mic ─► record 5 s ─► Whisper large-v3 int8 ─────► transcript ─► NLLB-1.3B int8 ────► translation ─┤
                                                                                                           ▼
-                                                     headset ◄─ speak ◄─ Sunbird VITS / Meta MMS-TTS ◄───┘
+                                       headset ◄─ speak ◄─ Sunbird VITS / Meta MMS-TTS (first app) ◄──┤
+                                       headset ◄─ speak ◄─ ONNX voice, English + Luganda (second app) ◄┘
 ```
 
 ## Results at a glance
 
-Measured on a Raspberry Pi 4 Model B (8 GB), CPU only, with heatsinks and fans. The headline comparison uses **six 5-second recordings of one speaker** (three English, three Luganda) put through each setup in the same way, with the benchmark waiting up to 15 minutes for the CPU to fall below 60 °C before each setup (per-clip start temperatures were 48–79 °C, so some runs were warm); figures are medians in seconds ([method and raw results](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips)).
+Measured on a Raspberry Pi 4 Model B (8 GB), CPU only, with heatsinks and fans. The headline comparison uses **six 5-second recordings of one speaker** (three English, three Luganda) put through each setup in the same way, with the benchmark waiting up to 15 minutes for the CPU to fall below 60 °C before each setup (per-clip start temperatures were 48–79 °C for setups A to C-final, so some runs were warm); figures are medians in seconds ([method and raw results](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips)).
 
 | Setup | Listen | Translate | Voice | **Spoken round trip** | Start-up |
 |---|---|---|---|---|---|
 | First app as originally built (Gemma started afresh on every tap) | 78.8 | 21.3 | 24.1 | **121.6 s** | none |
 | First app now (Gemma and two voices kept loaded) | 43.6 | 12.4 | 9.6 | **65.1 s** | 1–2 min |
 | **Second app** (Whisper + NLLB int8, kept loaded) | **19.3** | **10.7** | **9.9** | **40.8 s** | about 100 s |
+| Second app with the ONNX voice (run on a hotter CPU, so compare only the voice column) | 20.6 | 11.7 | **7.1** | 40.8 s | about 83 s |
 
 The second app is about **3× faster** than the first as built and 1.6× faster than Gemma kept loaded. Word error rates on these clips were comparable (0.09, 0.09 and 0.06), but that is one speaker and six sentences, so read it as "not obviously worse", not as a ranking. The middle row is the benchmark's setup with Gemma kept loaded; the changed app itself took 61–71 s on three of the clips.
 
@@ -55,10 +57,30 @@ The second app is about **3× faster** than the first as built and 1.6× faster 
 | Gemma generation speed | ~2.45 tokens/s generation, ~6.0 prompt (3-repetition benchmark, ±0.02); unchanged by keeping it loaded. Whisper and NLLB stage rates (about 0.7 and 1.0 tokens/s end to end) include their encoders and are not comparable |
 | Memory | First app with Gemma kept loaded: ~4.3 GB resident in the server. Second app: 3.9 GB in use with Whisper and NLLB, ~4.6 GB after a run with the voices. Original per-tap Gemma run: ~2.6 GB peak in use. The two apps cannot be open together |
 | Chat (Sunflower Chat, Pi 4) | First word after ~9 s, then ~2.2–2.3 tokens/s; a short answer takes 15–20 s ([Part 7](docs/07-sunflower-chat.md)) |
-| Speech synthesis | ~3–5× slower than real time; not changed between the apps. A background worker saves the per-tap load (about 10 s), not the synthesis |
+| Speech synthesis | Sunbird VITS: 2.6–3.7× the audio length on the Pi 4 (a background worker saves the per-tap load of about 10 s, not the synthesis). The small ONNX voice (109 MB, English and Luganda) runs at about 2×, taking 3–8 s per sentence; its int8 version is 4–5× slower. Nobody has judged its sound quality ([details](docs/06-fast-pipeline.md#a-faster-voice-a-character-level-onnx-model)) |
 | A 4 GB board | On an Orange Pi Zero 2W, Whisper int8 took ~24 s per clip and NLLB 9–20 s per sentence, with throttling; Gemma plus its audio encoder cannot fit |
 
 Mostly small samples on a device that throttles under sustained load (the CPU reached 72–79 °C), so read the figures as the right order of magnitude; the earlier single-run figures are in [Benchmarks](docs/benchmarks.md). An earlier claim of "about 30 s to listen" came from a clip about a second long and has been corrected: with 5 s recordings the original first app took about 78 s.
+
+### Models and sizes
+
+All on disk, as used on the Pi 4. Nothing here is stored in this repository.
+
+| Role | Model | Precision | Size | Used by |
+|---|---|---|---|---|
+| Listening and translating | [Sunbird/Sunflower-Gemma4-E2B](https://huggingface.co/Sunbird/Sunflower-Gemma4-E2B), converted to GGUF | Q4_K_M (original BF16: 10.21 GB) | 3.42 GB | first app, chat |
+| Audio encoder for Gemma | mmproj from the same model | F16 | 0.99 GB | first app |
+| Listening | Sunbird SunflowerASR-51 (Whisper large-v3 fine-tune), converted with CTranslate2 | int8 (float32 original: 6.17 GB) | 1.56 GB | second app |
+| Translating | Sunbird NLLB-1.3B (SALT), CTranslate2 | int8 | 1.38 GB | second app |
+| Voice, English and Luganda | [jq/sherpa-vits-tts-lug-eng](https://huggingface.co/jq/sherpa-vits-tts-lug-eng), character-level VITS in ONNX | fp32 (an int8 copy we made is 38 MB and slower) | 109 MB | second app |
+| Voice, per language | Sunbird VITS (English, Luganda, Runyankole) | fp32 | 145 MB, 450 MB, ~450 MB | first app; second app for Runyankole |
+| Voice, other languages | Meta MMS-TTS | fp32 | 139 MB each | both apps |
+
+Models in use: first app 4.41 GB for Gemma and its audio encoder; second app 2.94 GB for Whisper and NLLB, plus the voice. The measured figures that go with these are in [Benchmarks](docs/benchmarks.md#comparing-the-two-pipelines-part-6).
+
+### Where the raw data is
+
+[`results/`](results/README.md) holds the raw measurements behind every table: the six-clip head-to-head (JSON lines per run), the voice timings, and the quantization sweep's per-sentence outputs and scores. `results/headtohead.csv`, `models.csv` and `voice-pi4.csv` hold the headline figures as plain tables; `scripts/fast/key_numbers.py` regenerates the first from the raw files.
 
 ### What to expect
 
@@ -68,13 +90,13 @@ The Gemma model card's own evaluation (full-precision weights; not re-measured f
 
 | | |
 |---|---|
-| **[Key findings](docs/findings.md)** | The 34 non-obvious lessons, one page |
+| **[Key findings](docs/findings.md)** | The 37 non-obvious lessons, one page |
 | [Part 1: text model](docs/01-text-model.md) | Convert, quantize, deploy (Steps 1–10) |
 | [Part 2: audio input](docs/02-audio-input.md) | Speech understanding via llama.cpp's multimodal projector (Steps 11–13) |
 | [Part 3: text-to-speech](docs/03-text-to-speech.md) | Three TTS approaches tried; two kept (Steps 14–18) |
 | [Part 4: live audio and demo](docs/04-live-audio-demo.md) | Real mic and headset, terminal demo (Steps 19–22) |
 | [Part 5: touchscreen device](docs/05-touchscreen-device.md) | Display, touch fix, UI, launcher (Steps 23–26) |
-| [Part 6: a second, faster pipeline](docs/06-fast-pipeline.md) | Whisper + NLLB int8 instead of Gemma for listening and translating, kept loaded in memory: about 3× faster per spoken round trip on the Pi 4 in a six-clip head-to-head; also Orange Pi and Mac measurements |
+| [Part 6: a second, faster pipeline](docs/06-fast-pipeline.md) | Whisper + NLLB int8 instead of Gemma for listening and translating, kept loaded in memory: about 3× faster per spoken round trip on the Pi 4 in a six-clip head-to-head; a small ONNX voice for English and Luganda; also Orange Pi and Mac measurements |
 | [Part 7: Sunflower Chat](docs/07-sunflower-chat.md) | A conversation app: speak or type to Gemma on the touchscreen, replies streamed, optional spoken replies |
 | [Benchmarks](docs/benchmarks.md) | Timing, memory, size, including the two pipelines side by side |
 | [Quantization comparison](docs/quantization-sweep.md) | Eight levels: size, translation quality, Pi speed and memory |
@@ -91,6 +113,7 @@ python3 scripts/sunflower_touch_ui.py   # 480x320 touchscreen app (Gemma kept lo
 scripts/fast/sunflower_fast_ui.py       # second app, Whisper + NLLB (see Part 6; needs its own Python environment)
 python3 scripts/sunflower_chat_ui.py    # third app, chat with Gemma (see Part 7)
 python3 scripts/sunflower_demo.py       # terminal menu (text/speech, in/out)
+python3 scripts/fast/bench_compare.py D # benchmark setups A, B, C or D on a Pi (see results/README.md)
 ```
 
 The touchscreen app's title bar uses Sunbird's logos, which are **not** in this repository. Fetch them with `scripts/fetch_assets.sh`; without them the app shows a text-only title. To install a desktop launcher: `scripts/pi/install_launcher.sh`. To preview the UI layout on a desktop machine: `python3 scripts/preview_ui.py`.
@@ -99,6 +122,8 @@ The touchscreen app's title bar uses Sunbird's logos, which are **not** in this 
 
 ```
 README.md          this page
+LICENSE            MIT (code and docs; the models keep their own licenses)
+results/           raw measurements and CSV tables for the paper (see results/README.md)
 docs/              the write-up, split by part
 scripts/
   sunflower_touch_ui.py     touchscreen app (Translate / Transcribe); Gemma and two voices kept loaded
@@ -110,7 +135,7 @@ scripts/
   touch_test.py             draws a marker where each touch lands (for calibration)
   preview_ui.py             desktop preview of the touchscreen UI
   fetch_assets.sh           downloads the logos (not stored here)
-  fast/                     second pipeline: Whisper + NLLB app, voice worker, experiments (Part 6)
+  fast/                     second pipeline: Whisper + NLLB app, ONNX voice, benchmark scripts, experiments (Part 6)
   setup-pi.sh               rebuild a Pi: packages, llama.cpp, Python envs, VITS, display, touch, launcher, mic
   pi/                       udev touch rule, launcher installer, VITS import fix (patch_monotonic_align.py)
   quant-sweep/              make/evaluate/score the quantization levels; Pi speed benchmark

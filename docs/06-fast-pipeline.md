@@ -19,7 +19,7 @@ The first pipeline ([Parts 1–5](01-text-model.md)) uses one model, Sunflower-G
 
 **The first app has since been changed** to keep Gemma, its audio encoder and the English and Luganda voices loaded (a local `llama-server` plus the shared voice worker), which is setup B below made permanent. A headless run of the changed app over three of the recorded clips took 61–71 s per round trip, matching setup B (median 65.1 s), after a cold start-up of 111 s for Gemma and 26 s for the voices. The frozen per-tap version remains the baseline (setup A).
 
-Speech output was deliberately left unchanged so the comparison isolates the listening and translating stages. The small ONNX voice (`jq/vits-tts-lug-eng-onnx`) was tried and **not adopted**: its repository has no model card, the tokens are an IPA phoneme set, `espeak-ng` has no Luganda, and `sherpa-onnx` refused it ([experiments](#the-small-onnx-voice-not-adopted)).
+Speech output was deliberately left unchanged so the comparison isolates the listening and translating stages. A smaller, faster voice was tested afterwards and added to the second app for English and Luganda: a character-level ONNX model, one 109 MB file for both languages ([below](#a-faster-voice-a-character-level-onnx-model)). An earlier attempt with a different ONNX model had failed because it was the wrong model for text input; that is explained in the same section.
 
 ## How the models were made
 
@@ -81,11 +81,12 @@ Loading the English and Luganda voices into the worker takes about 26 s once at 
 
 ### Head-to-head on the Pi 4, six recorded clips
 
-**Method.** Six 5-second recordings of one speaker (three English, three Luganda; `scripts/fast/record_set.py`) went through each setup on the same Pi 4: English clips were translated into Luganda, Luganda clips into English, and the translation was spoken. `scripts/fast/bench_compare.py` timed the three stages identically in every setup, one setup per process so memory was freed between them, waiting up to 15 minutes for the CPU to fall below 60 °C before each (per-clip start temperatures were 48–79 °C, so some runs were warm) and an unscored warm-up run for the setups that stay loaded. Setups:
+**Method.** Six 5-second recordings of one speaker (three English, three Luganda; `scripts/fast/record_set.py`) went through each setup on the same Pi 4: English clips were translated into Luganda, Luganda clips into English, and the translation was spoken. `scripts/fast/bench_compare.py` timed the three stages identically in every setup, one setup per process so memory was freed between them, waiting up to 15 minutes for the CPU to fall below 60 °C before each (per-clip start temperatures were 48–79 °C for setups A to C-final, so some runs were warm) and an unscored warm-up run for the setups that stay loaded. Setups:
 
 - **A** the first app as it was before it was changed to keep models loaded (a new process per call, voice loaded per tap; frozen in `scripts/baseline/sunflower_touch_ui_per_tap.py`, git tag `v1-first-app-per-tap`);
 - **B** the first app's model kept loaded in `llama-server` (this is what the first app now does) (prompt cache **off**, so repeated inputs are not flattered) with the English and Luganda voices preloaded;
-- **C-5s** the second app with a 5 s window; **C-tuned** with a 6 s window, no timestamp tokens and no repeated 3-grams passed in from outside; **C-final** the finished app with those as defaults plus the two guards.
+- **C-5s** the second app with a 5 s window; **C-tuned** with a 6 s window, no timestamp tokens and no repeated 3-grams passed in from outside; **C-final** the finished app with those as defaults plus the two guards;
+- **D** C-final with the character-level ONNX voice for English and Luganda, run a day later (see [the voice section](#a-faster-voice-a-character-level-onnx-model)). **Its CPU was hotter than C-final's** (clips started at 73–84 °C against 58–70 °C), so compare its voice column, not its total.
 
 **Median per clip, seconds** (raw runs in `results/pi4-headtohead-2026-10-06/`):
 
@@ -96,6 +97,7 @@ Loading the English and Luganda voices into the worker takes about 26 s once at 
 | **C-5s** second app, 5 s window | 27.0 | 15.0 | 13.5 | 56.2 | **335.7** (a 299 s loop) | 96 s | 1.03 | 3 of 6 | 72 °C |
 | **C-tuned** 6 s window + options | 19.8 | 11.6 | 10.1 | 42.6 | 45.2 | 107 s | 0.23 | 1 of 6 | 72 °C |
 | **C-final** finished app | **19.3** | **10.7** | **9.9** | **40.8** | 43.5 | 102 s | **0.06** | 0 of 6 | 72 °C |
+| **D** C-final + ONNX voice (hot CPU, see note) | 20.6 | 11.7 | **7.1** | 40.8 | 47.4 | 83 s | not scored | not checked | 84 °C |
 
 Without its cold first call, A's median total is 121.3 s (listen 78.4, translate 22.3, voice 20.5).
 
@@ -115,9 +117,44 @@ Generation speed of the first pipeline's model was **2.40–2.47 tokens/s** in s
 
 To check whether loading Gemma once would help the first pipeline, `llama-server` ran Q4_K_M with its audio encoder on the Pi 4: ready in 19 s, 4.27 GB resident. Translation fell to 7.6–11 s per sentence (from about 18 s). Audio transcription of a new clip took 17.8–37.2 s on the first request (an identical repeat took 2.8–4.5 s, **because of caching**, so those are not honest figures). Loading once helps translation a lot and audio little.
 
-## The small ONNX voice (not adopted)
+## A faster voice: a character-level ONNX model
 
-`jq/vits-tts-lug-eng-onnx` (114 MB, or 38 MB at int8) loads and runs under `onnxruntime`: about 2 s per sentence on the Pi 4 at full precision, and **int8 was slower** than full precision on both boards (Pi 4 7.6–9.9 s; Orange Pi 18–29 s against 3–7 s). But the output was never confirmed to be speech: the model expects phonemes, and without them our character input produced clips of about a second for two sentences. `sherpa-onnx` refused it twice (plain mode: not a character model, a lexicon is needed; with eSpeak data: a duplicate apostrophe token at ids 157 and 159). The question of how it should be fed is open.
+**Result.** The ONNX voice `jq/sherpa-vits-tts-lug-eng` speaks English and Luganda from one 109 MB file and synthesizes at about **2× the audio length on the Pi 4**, against 2.6–3.7× for the Sunbird VITS voices (about 450 MB per language). In the six-clip benchmark the voice step's median fell from 9.9 s to 7.1 s (setup D above). The second app now uses it for English and Luganda; `FAST_VOICE=vits` switches back, and Runyankole still uses its Sunbird VITS voice because this model does not speak it.
+
+**The model.** `vits-lug-eng.fp32.onnx` from [`jq/sherpa-vits-tts-lug-eng`](https://huggingface.co/jq/sherpa-vits-tts-lug-eng), 114,026,066 bytes, SHA-256 `45083e0c27d3f857fc3c5342b06aef1a088eadf8ba414a9f84358facd11bf5cc`, plus its 39-symbol `tokens.txt` (lowercase letters, space and a few symbols). It is the model the [Sunbird tutor app](https://github.com/SunbirdAI/sunflower-app) downloads. Its metadata reads `model_type: vits`, `frontend: characters`, `add_blank: 0`, one speaker. The metadata gives a sample rate of 22500 but the app, and we, play it at 22050 Hz and Whisper transcribed the result correctly.
+
+**How to feed it** (from `lib/tts/tts_engine.dart` in the tutor app, implemented as `CharVoice` in `scripts/fast/sunflower_fast_ui.py`): lowercase the text, map each character to its id in `tokens.txt`, skip unknown characters, no blank tokens between them, and pass `input` (ids), `input_lengths` and `scales = [0.667, 1.0, 0.8]`. Text is split at punctuation and into chunks of 10 words, as in the tutor app.
+
+**Pi 4 timings** (`scripts/fast/experiments/tts_char_onnx.py`, 4 threads, three runs per sentence, CPU below 60 °C at the start; raw output in `results/voice-onnx-2026-10-07/`):
+
+| Sentence | Audio | fp32 synthesis time | int8 synthesis time |
+|---|---|---|---|
+| English, 5 words | 1.4 s | 3.2, 3.0, 2.8 s | 14.9, 12.7, 12.0 s |
+| English, 14 words | 3.6 s | 7.2, 6.6, 7.3 s | 33.8, 31.0, 31.5 s |
+| Luganda, 5 words | 2.3 s | 5.6, 4.6, 5.0 s | 20.1, 19.9, 20.9 s |
+| Luganda, 10 words | 3.8 s | 7.4, 7.2, 8.4 s | 33.4, 31.3, 25.3 s |
+
+Load takes 3.0 s (fp32) and 3.8 s (int8). An earlier fp32 run gave the same figures within noise. On the Mac the fp32 model took 0.70 s (English) and 0.41 s (Luganda) and int8 1.27 s and 1.71 s.
+
+**int8 is not worth it.** We quantized the model ourselves with ONNX Runtime dynamic quantization (38 MB). It was four to five times *slower* than fp32 on the Pi 4 and also slower on the Mac. The likely reason is that dynamic quantization adds quantize and dequantize steps around the convolution layers of VITS and the Cortex-A72 has no int8 dot-product instructions; this explanation was not tested. The int8 file saves 76 MB of disk and nothing else.
+
+**Is the output speech?** On the Mac, the Sunbird Whisper transcribed the fp32 output of "hello, how are you today?" as "Hello how are you today." and of "oli otya, nsanyuse okukulaba leero" as "Oli otyaasanyisa okukulaba leero?"; the int8 output gave "Hello, how are you today?" and "Oli wetyaamuzanisa okukulaba leero?". English is right; the Luganda is close but not exact in both. **Nobody has listened to the voice for quality, and no Luganda speaker has judged it.** Memory use of the voice was not measured separately (the second app holds about 3.4 GB resident with Whisper, NLLB and this voice loaded).
+
+### The earlier attempt: a different model that expects phonemes
+
+We first tested `jq/vits-tts-lug-eng-onnx` and concluded the ONNX voice could not be used. That was **the wrong model**, and the conclusion was ours, not the model's. The two repositories look alike but differ in the input vocabulary:
+
+| | `jq/sherpa-vits-tts-lug-eng` (works with text) | `jq/vits-tts-lug-eng-onnx` (expects phonemes) |
+|---|---|---|
+| Files | `vits-lug-eng.fp32.onnx` (114,026,066 bytes) | `vits-lug-eng.onnx` (114,325,834 bytes), `vits-lug-eng.int8.onnx` (38,314,074 bytes) |
+| Graph | VITS, 6,476 nodes, input dimensions `N`, `L` | VITS, 6,474 nodes, input dimensions `batch_size`, `phonemes` |
+| Vocabulary | 39 tokens: lowercase letters, space, symbols | 162 tokens: IPA symbols, stress marks, letters and `<blk>` |
+| Metadata | `frontend: characters` | no `frontend` key |
+| Uploaded | 13 May 2026 | 15 May 2026, after several re-uploads |
+
+Fed lowercase characters, with or without blank tokens, the phoneme model produced clips of about one to two seconds that Whisper transcribed as nonsense ("vac.", "11."). `sherpa-onnx` refused it twice (plain mode: not a character model; with eSpeak data: a duplicate apostrophe token at ids 157 and 159). We did not find a Luganda voice in `espeak-ng`'s voice list on the Pi (the check was a search of that list for a few names). Whether the phoneme model is a newer retrain meant to replace the character one, and which phonemizer it expects, is **unanswered**: neither repository has a model card.
+
+The timings quoted for that model in earlier versions of these docs (about 2 s per sentence at full precision, int8 slower) were measured on clips that were not speech and should not be used.
 
 ## The Orange Pi Zero 2W
 
@@ -128,7 +165,9 @@ Four Cortex-A53 cores at 1.5 GHz and 3.9 GB of memory, no passwordless `sudo`. W
 - **More speakers and more clips.** Six clips from one speaker, with reference sentences we chose, show the setups are comparable, not which is more accurate. The repeat guard and window were tuned on these clips.
 - **Translation quality**, judged by Luganda speakers; NLLB's beam size (5 now) against time.
 - **Whisper encoder and decoder time measured separately** (the encoder is inferred to dominate at the stock window).
-- **Pi 5 runs**, and whether the small ONNX voice can be used at all.
+- **Pi 5 runs.**
+- **The ONNX voice's sound quality** (judged by a Luganda speaker) and its memory use; a clean benchmark of setup D with the CPU cooled between clips (the first run was hot); whether the phoneme-based ONNX model can be fed with a phonemizer.
+- **int8 against float32 for Whisper and NLLB.** Both were only ever run as int8, and the int8 voice was slower than fp32, so int8 is not automatically faster on this CPU.
 - **The unexplained 53 s voice step** inside the app (31 s standalone).
 - Cooling is not an open question: the Pi 4 has heatsinks and two fans and still reached 78–79 °C under the first app's sustained load.
 

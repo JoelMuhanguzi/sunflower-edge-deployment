@@ -1,0 +1,18 @@
+ff9b2dce42220d03
+ff9b2dce42220d03
+-- start temp=58.4'C
+vits-lug-eng.int8.onnx load: 3.79s
+eng 5 words, 1.4s audio: 14.93s, 12.70s, 11.98s  (first 14.93s = 10.99x real time)
+eng 14 words, 3.6s audio: 33.80s, 31.03s, 31.53s  (first 33.80s = 9.36x real time)
+lug 5 words, 2.2s audio: 20.07s, 19.92s, 20.88s  (first 20.07s = 9.00x real time)
+lug 10 words, 2.8s audio: 33.40s, 31.26s, 25.28s  (first 33.40s = 11.89x real time)
+-- end temp=80.3'C
+-- start temp=59.9'C
+vits-lug-eng.fp32.onnx load: 2.99s
+eng 5 words, 1.4s audio: 3.15s, 2.98s, 2.82s  (first 3.15s = 2.28x real time)
+eng 14 words, 3.6s audio: 7.18s, 6.60s, 7.30s  (first 7.18s = 2.02x real time)
+lug 5 words, 2.3s audio: 5.64s, 4.61s, 4.97s  (first 5.64s = 2.47x real time)
+lug 10 words, 3.8s audio: 7.35s, 7.17s, 8.44s  (first 7.35s = 1.94x real time)
+-- end temp=61.3'C
+
+[exited with code 0]

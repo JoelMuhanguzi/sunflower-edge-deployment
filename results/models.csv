@@ -1,0 +1,11 @@
+role,model,source,precision,size_gb,used_by
+listening_and_translating,Sunflower-Gemma4-E2B GGUF,Sunbird/Sunflower-Gemma4-E2B,Q4_K_M,3.42,first app and chat
+audio_encoder,Gemma4 mmproj,Sunbird/Sunflower-Gemma4-E2B,F16,0.99,first app
+listening,SunflowerASR-51 (Whisper large-v3 fine-tune),Sunbird/SunflowerASR-51-african-languages,int8 (CTranslate2),1.56,second app
+translating,NLLB-1.3B SALT,Sunbird/translate-nllb-1.3b-salt,int8 (CTranslate2),1.38,second app
+voice_english_luganda,character-level VITS (ONNX),jq/sherpa-vits-tts-lug-eng,fp32,0.109,second app
+voice_english_luganda_int8,same model quantized by us,derived,int8,0.038,not used (4-5x slower)
+voice_english,Sunbird VITS,Sunbird,fp32,0.145,first app
+voice_luganda,Sunbird VITS,Sunbird,fp32,0.450,first app
+voice_runyankole,Sunbird VITS,Sunbird,fp32,0.450,both apps
+voice_other,Meta MMS-TTS,facebook/mms-tts-*,fp32,0.139,both apps

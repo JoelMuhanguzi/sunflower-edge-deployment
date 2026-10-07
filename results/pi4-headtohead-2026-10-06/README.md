@@ -8,3 +8,7 @@ second app with a 5 s window, C-tuned the second app with a 6 s window, no times
 
 The clips were six 5-second recordings of one speaker (three English, three Luganda) made with
 `scripts/fast/record_set.py`; the audio is not included. The reference sentences are in each record's `reference`.
+
+## Setup D (added 2026-10-07)
+
+`D-onnx-voice_20261007_113719.jsonl` is setup D: the finished second app with the character-level ONNX voice (`jq/sherpa-vits-tts-lug-eng`) for English and Luganda, run with `bench_compare.py D --label D-onnx-voice` a day after the others. **The CPU was hot**: the warm-up started at 61 °C and the six scored clips at 73–84 °C, with the soft temperature limit active (`throttled` 0xf0008), against 58–70 °C for C-final. Compare the voice stage, not the totals. Word error rates were not computed for it.
