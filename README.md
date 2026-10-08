@@ -8,6 +8,8 @@ Two pipelines were built and compared on the same device:
 - **The second app, "Sunflower Fast"** swaps that for Sunbird's smaller specialist models, a Whisper-based speech recogniser and an NLLB translator, kept loaded in memory, and speaks English and Luganda with a small character-level ONNX voice. On the Pi 4 it took **a median 41 s per spoken round trip against 122 s** for the first app as originally built (Part 6).
 - **A third app, "Sunflower Chat"**, is for conversation with Gemma: speak or type a question and read the reply as it streams in (Part 7).
 
+All of it was measured on a **Raspberry Pi 4 and, in Part 8, a Raspberry Pi 5** under matching conditions. On the Pi 5 the fastest setup (Gemma kept loaded) takes **12 s per spoken round trip** against 63–66 s on the Pi 4, and the Whisper + NLLB pipeline takes 17–20 s against 37–40 s.
+
 This repository is a reproducible **log of how that was done**, including the dead ends. The Gemma repository ships only a 10 GB full-precision checkpoint, so much of the work was quantizing it, adding audio input and speech output, and making it usable on a small touchscreen. Part 6 then asked whether the specialist models do better and measured both pipelines on the same recordings.
 
 > **Status: working prototype, not a product.** Speech accuracy varies a lot by language (see [what to expect](#what-to-expect)); the accuracy comparison between pipelines rests on six recordings of one speaker; the touch calibration is only partly verified; and the device has no battery or enclosure yet.
@@ -33,6 +35,26 @@ This repository is a reproducible **log of how that was done**, including the de
 ```
 
 ## Results at a glance
+
+### Pi 4 and Pi 5, measured the same way (Part 8)
+
+Median seconds for one spoken round trip (listen, translate, speak) over six recorded 5-second clips, both boards headless from a cold boot with the same scripts. Pi 4: heatsinks and two fans (the soft temperature limit was reached on most runs). Pi 5: active cooler, 5 V / 5 A supply, never throttled. [Full tables, stage splits and caveats](docs/08-pi5-and-matched-rerun.md); raw data in [`results/`](results/README.md).
+
+| Setup | Pi 4 total | Pi 5 total | Pi 5: listen / translate / voice | Pi 5 memory |
+|---|---|---|---|---|
+| A: first app as built (Gemma started per tap) | 98.4 | 51.7 | 27.5 / 10.7 / 12.8 | – |
+| B: Gemma kept loaded, Sunbird VITS voices | 66.1 | **12.3** | 7.1 / 2.7 / 2.6 | 6.6 GB |
+| E: Gemma kept loaded, ONNX voice | 63.0 | 12.9 | 7.4 / 3.0 / 1.7 | 6.1 GB |
+| C: Whisper + NLLB int8, Sunbird VITS voices | 40.0 | 20.1 | 9.0 / 7.4 / 3.2 | 4.4 GB |
+| D: Whisper + NLLB int8, ONNX voice | **36.6** | 17.5 | 8.8 / 6.6 / 1.8 | 3.7 GB |
+
+- **The best pipeline depends on the board.** On the Pi 4 the specialist models (Whisper + NLLB) are faster; on the Pi 5 Gemma kept loaded is, because its generation speed rose 3.2× (2.45 to 7.80 tokens/s) and its prompt processing 6.7×, while the CTranslate2 decoders gained about 2×.
+- **Keeping models loaded is the biggest single gain on the Pi 5** (A to B: 51.7 s to 12.3 s).
+- **Where the time goes:** at the 6 s window the app uses, Whisper spends 82% of its time in the decoder and 18% in the encoder; NLLB spends nearly all of it in the decoding loop (about half a second per token). int8 is not the cause: float32 is 2–4× slower for both.
+- **The ONNX voice** (109 MB, English and Luganda) synthesizes faster than real time on the Pi 5 and about 2× real time on the Pi 4; its int8 version is 3–6× *slower*.
+- Word error rate: 0.06 for every Whisper setup; Gemma's varies between runs (0.08–0.29) because it samples. One speaker, six clips: "comparable", not a ranking.
+
+### The original Pi 4 comparison (Part 6)
 
 Measured on a Raspberry Pi 4 Model B (8 GB), CPU only, with heatsinks and fans. The headline comparison uses **six 5-second recordings of one speaker** (three English, three Luganda) put through each setup in the same way, with the benchmark waiting up to 15 minutes for the CPU to fall below 60 °C before each setup (per-clip start temperatures were 48–79 °C for setups A to C-final, so some runs were warm); figures are medians in seconds ([method and raw results](docs/06-fast-pipeline.md#head-to-head-on-the-pi-4-six-recorded-clips)).
 
@@ -90,7 +112,7 @@ The Gemma model card's own evaluation (full-precision weights; not re-measured f
 
 | | |
 |---|---|
-| **[Key findings](docs/findings.md)** | The 37 non-obvious lessons, one page |
+| **[Key findings](docs/findings.md)** | The 43 non-obvious lessons, one page |
 | [Part 1: text model](docs/01-text-model.md) | Convert, quantize, deploy (Steps 1–10) |
 | [Part 2: audio input](docs/02-audio-input.md) | Speech understanding via llama.cpp's multimodal projector (Steps 11–13) |
 | [Part 3: text-to-speech](docs/03-text-to-speech.md) | Three TTS approaches tried; two kept (Steps 14–18) |
@@ -98,6 +120,7 @@ The Gemma model card's own evaluation (full-precision weights; not re-measured f
 | [Part 5: touchscreen device](docs/05-touchscreen-device.md) | Display, touch fix, UI, launcher (Steps 23–26) |
 | [Part 6: a second, faster pipeline](docs/06-fast-pipeline.md) | Whisper + NLLB int8 instead of Gemma for listening and translating, kept loaded in memory: about 3× faster per spoken round trip on the Pi 4 in a six-clip head-to-head; a small ONNX voice for English and Luganda; also Orange Pi and Mac measurements |
 | [Part 7: Sunflower Chat](docs/07-sunflower-chat.md) | A conversation app: speak or type to Gemma on the touchscreen, replies streamed, optional spoken replies |
+| [Part 8: Pi 5 and a matched Pi 4 rerun](docs/08-pi5-and-matched-rerun.md) | Both boards measured the same way: six setups, where Whisper's and NLLB's time goes, int8 against float32, Gemma's generation speed, memory |
 | [Benchmarks](docs/benchmarks.md) | Timing, memory, size, including the two pipelines side by side |
 | [Quantization comparison](docs/quantization-sweep.md) | Eight levels: size, translation quality, Pi speed and memory |
 | [Rebuilding from scratch](docs/rebuild-from-scratch.md) | A blank-card rebuild: what was identical, what differed, damaged files |
@@ -135,7 +158,7 @@ scripts/
   touch_test.py             draws a marker where each touch lands (for calibration)
   preview_ui.py             desktop preview of the touchscreen UI
   fetch_assets.sh           downloads the logos (not stored here)
-  fast/                     second pipeline: Whisper + NLLB app, ONNX voice, benchmark scripts, experiments (Part 6)
+  fast/                     second pipeline: Whisper + NLLB app, ONNX voice, benchmark scripts, diagnosis experiments (Parts 6 and 8)
   setup-pi.sh               rebuild a Pi: packages, llama.cpp, Python envs, VITS, display, touch, launcher, mic
   pi/                       udev touch rule, launcher installer, VITS import fix (patch_monotonic_align.py)
   quant-sweep/              make/evaluate/score the quantization levels; Pi speed benchmark

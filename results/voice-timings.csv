@@ -1,0 +1,37 @@
+device,conditions,precision,language,words,audio_s,load_s,run1_s,run2_s,run3_s,source
+Pi 4,original run,fp32,English,5,1.5,3.21,2.94,3.11,3.21,voice-onnx-2026-10-07/pi4-fp32-first-run.txt
+Pi 4,original run,fp32,English,14,3.8,3.21,7.40,6.76,7.71,voice-onnx-2026-10-07/pi4-fp32-first-run.txt
+Pi 4,original run,fp32,Luganda,5,2.1,3.21,4.31,4.97,4.40,voice-onnx-2026-10-07/pi4-fp32-first-run.txt
+Pi 4,original run,fp32,Luganda,10,2.9,3.21,6.73,7.36,6.00,voice-onnx-2026-10-07/pi4-fp32-first-run.txt
+Pi 4,original run,int8,English,5,1.4,3.79,14.93,12.70,11.98,voice-onnx-2026-10-07/pi4-int8-and-fp32-same-session.txt
+Pi 4,original run,int8,English,14,3.6,3.79,33.80,31.03,31.53,voice-onnx-2026-10-07/pi4-int8-and-fp32-same-session.txt
+Pi 4,original run,int8,Luganda,5,2.2,3.79,20.07,19.92,20.88,voice-onnx-2026-10-07/pi4-int8-and-fp32-same-session.txt
+Pi 4,original run,int8,Luganda,10,2.8,3.79,33.40,31.26,25.28,voice-onnx-2026-10-07/pi4-int8-and-fp32-same-session.txt
+Pi 4,original run,fp32,English,5,1.4,2.99,3.15,2.98,2.82,voice-onnx-2026-10-07/pi4-int8-and-fp32-same-session.txt
+Pi 4,original run,fp32,English,14,3.6,2.99,7.18,6.60,7.30,voice-onnx-2026-10-07/pi4-int8-and-fp32-same-session.txt
+Pi 4,original run,fp32,Luganda,5,2.3,2.99,5.64,4.61,4.97,voice-onnx-2026-10-07/pi4-int8-and-fp32-same-session.txt
+Pi 4,original run,fp32,Luganda,10,3.8,2.99,7.35,7.17,8.44,voice-onnx-2026-10-07/pi4-int8-and-fp32-same-session.txt
+Pi 4,matched rerun,fp32,English,5,1.5,5.43,2.96,3.55,3.28,pi4-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 4,matched rerun,fp32,English,14,4.1,5.43,10.03,7.17,8.79,pi4-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 4,matched rerun,fp32,Luganda,5,2.3,5.43,4.38,4.54,4.97,pi4-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 4,matched rerun,fp32,Luganda,10,3.7,5.43,6.39,6.73,7.98,pi4-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 4,matched rerun,int8,English,5,1.5,4.53,12.59,14.48,13.26,pi4-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 4,matched rerun,int8,English,14,3.4,4.53,31.06,32.51,30.02,pi4-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 4,matched rerun,int8,Luganda,5,2.1,4.53,17.73,19.37,18.18,pi4-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 4,matched rerun,int8,Luganda,10,4.1,4.53,28.85,28.31,35.39,pi4-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/3 A, no fan (throttled)",fp32,English,5,1.6,1.16,0.91,1.07,1.07,pi5-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/3 A, no fan (throttled)",fp32,English,14,3.3,1.16,2.47,2.31,2.23,pi5-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/3 A, no fan (throttled)",fp32,Luganda,5,2.1,1.16,1.42,1.60,1.58,pi5-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/3 A, no fan (throttled)",fp32,Luganda,10,3.7,1.16,2.49,2.27,2.96,pi5-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/3 A, no fan (throttled)",int8,English,5,1.6,1.52,5.21,5.13,5.62,pi5-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/3 A, no fan (throttled)",int8,English,14,3.7,1.52,12.71,12.09,12.92,pi5-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/3 A, no fan (throttled)",int8,Luganda,5,2.8,1.52,7.24,7.44,9.70,pi5-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/3 A, no fan (throttled)",int8,Luganda,10,3.4,1.52,11.97,12.15,12.09,pi5-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/5 A, active cooler",fp32,English,5,1.5,2.27,1.15,0.99,1.00,pi5-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/5 A, active cooler",fp32,English,14,3.8,2.27,2.62,2.72,2.57,pi5-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/5 A, active cooler",fp32,Luganda,5,2.2,2.27,1.38,1.35,1.41,pi5-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/5 A, active cooler",fp32,Luganda,10,3.3,2.27,2.14,2.13,2.23,pi5-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/5 A, active cooler",int8,English,5,1.5,1.99,5.34,5.08,5.41,pi5-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/5 A, active cooler",int8,English,14,3.6,1.99,12.31,13.27,12.97,pi5-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/5 A, active cooler",int8,Luganda,5,2.1,1.99,8.42,7.80,7.62,pi5-clean-2026-10-08/voice-onnx-fp32-int8.txt
+Pi 5,"5 V/5 A, active cooler",int8,Luganda,10,3.7,1.99,11.36,13.21,13.22,pi5-clean-2026-10-08/voice-onnx-fp32-int8.txt

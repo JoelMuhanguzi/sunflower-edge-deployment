@@ -1,0 +1,19 @@
+=== begin (cold) 08:35:56 temp=39.9'C throttled=0x0
+Mem:            7819         279        6984           9         651        7540
+=== setup D beam5 08:35:56 temp=40.4'C throttled=0x0
+BENCH_DONE D wrote /home/sunflower/ml/bench_results/pi4clean-D_20261008_083556.jsonl
+=== setup E beam5 08:41:26 temp=64.7'C throttled=0x0
+BENCH_DONE E wrote /home/sunflower/ml/bench_results/pi4clean-E_20261008_084126.jsonl
+=== setup B beam5 08:50:44 temp=79.3'C throttled=0x80000
+BENCH_DONE B wrote /home/sunflower/ml/bench_results/pi4clean-B_20261008_085044.jsonl
+=== setup A beam5 08:59:46 temp=77.9'C throttled=0x80000
+BENCH_DONE A wrote /home/sunflower/ml/bench_results/pi4clean-A_20261008_085946.jsonl
+=== setup C beam5 09:10:24 temp=68.6'C throttled=0x80000
+BENCH_DONE C wrote /home/sunflower/ml/bench_results/pi4clean-C_20261008_091024.jsonl
+=== setup D beam1 09:17:22 temp=68.1'C throttled=0x80000
+BENCH_DONE D wrote /home/sunflower/ml/bench_results/pi4clean-D-beam1_20261008_091722.jsonl
+=== setup C beam1 09:22:56 temp=69.6'C throttled=0x80000
+BENCH_DONE C wrote /home/sunflower/ml/bench_results/pi4clean-C-beam1_20261008_092257.jsonl
+=== voice fp32/int8 09:28:36 temp=68.1'C throttled=0x80000
+=== end 09:35:21 temp=66.2'C throttled=0x80000
+CLEAN_DONE

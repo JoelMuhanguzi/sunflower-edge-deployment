@@ -136,7 +136,7 @@ To check whether loading Gemma once would help the first pipeline, `llama-server
 
 Load takes 3.0 s (fp32) and 3.8 s (int8). An earlier fp32 run gave the same figures within noise. On the Mac the fp32 model took 0.70 s (English) and 0.41 s (Luganda) and int8 1.27 s and 1.71 s.
 
-**int8 is not worth it.** We quantized the model ourselves with ONNX Runtime dynamic quantization (38 MB). It was four to five times *slower* than fp32 on the Pi 4 and also slower on the Mac. The likely reason is that dynamic quantization adds quantize and dequantize steps around the convolution layers of VITS and the Cortex-A72 has no int8 dot-product instructions; this explanation was not tested. The int8 file saves 76 MB of disk and nothing else.
+**int8 is not worth it.** We quantized the model ourselves with ONNX Runtime dynamic quantization (38 MB). It was four to five times *slower* than fp32 on the Pi 4 and also slower on the Mac. The reason is not established. A first guess was that the Cortex-A72 lacks int8 dot-product instructions, but a preliminary run on a Raspberry Pi 5 (Cortex-A76, which has them) was also 3–6× slower with int8, so that does not explain it; more likely ONNX Runtime's dynamically quantized kernels, or the quantize and dequantize steps around the convolutions, cost more than they save for this model. The int8 file saves 76 MB of disk and nothing else.
 
 **Is the output speech?** On the Mac, the Sunbird Whisper transcribed the fp32 output of "hello, how are you today?" as "Hello how are you today." and of "oli otya, nsanyuse okukulaba leero" as "Oli otyaasanyisa okukulaba leero?"; the int8 output gave "Hello, how are you today?" and "Oli wetyaamuzanisa okukulaba leero?". English is right; the Luganda is close but not exact in both. **Nobody has listened to the voice for quality, and no Luganda speaker has judged it.** Memory use of the voice was not measured separately (the second app holds about 3.4 GB resident with Whisper, NLLB and this voice loaded).
 
@@ -163,11 +163,11 @@ Four Cortex-A53 cores at 1.5 GHz and 3.9 GB of memory, no passwordless `sudo`. W
 ## Not yet established
 
 - **More speakers and more clips.** Six clips from one speaker, with reference sentences we chose, show the setups are comparable, not which is more accurate. The repeat guard and window were tuned on these clips.
-- **Translation quality**, judged by Luganda speakers; NLLB's beam size (5 now) against time.
-- **Whisper encoder and decoder time measured separately** (the encoder is inferred to dominate at the stock window).
-- **Pi 5 runs.**
+- **Translation quality** judged independently (the author, a Luganda speaker and the speaker on the recordings, judged the six sentences' transcripts and translations correct; no one else has); NLLB's beam size (5 now) against time.
+- **Whisper encoder and decoder time** are now measured on the Pi 5 ([Part 8](08-pi5-and-matched-rerun.md)): the encoder is 65% of the time at the stock 30 s window and 18% at the 6 s window the app uses.
+- **Pi 5 runs** are in [Part 8](08-pi5-and-matched-rerun.md).
 - **The ONNX voice's sound quality** (judged by a Luganda speaker) and its memory use; a clean benchmark of setup D with the CPU cooled between clips (the first run was hot); whether the phoneme-based ONNX model can be fed with a phonemizer.
-- **int8 against float32 for Whisper and NLLB.** Both were only ever run as int8, and the int8 voice was slower than fp32, so int8 is not automatically faster on this CPU.
+- ~~int8 against float32 for Whisper and NLLB~~: measured on the Pi 5 in [Part 8](08-pi5-and-matched-rerun.md); float32 is 2–4× slower than int8 for both.
 - **The unexplained 53 s voice step** inside the app (31 s standalone).
 - Cooling is not an open question: the Pi 4 has heatsinks and two fans and still reached 78–79 °C under the first app's sustained load.
 

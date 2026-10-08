@@ -23,7 +23,8 @@ for path in sys.argv[1:]:
         runs.setdefault(r["label"], []).append(r)
 
 def med(xs): return st.median(xs) if xs else float("nan")
-order = [k for k in ("A", "B", "C-5s", "C-tuned", "C-final") if k in runs]
+preferred = ("A", "B", "C-5s", "C-tuned", "C-final")
+order = [k for k in preferred if k in runs] + [k for k in runs if k not in preferred]
 print(f"{'setup':<9}{'n':>2} {'listen':>8} {'transl.':>8} {'voice':>7} {'TOTAL':>7} {'mean':>7} {'max':>7} {'startup':>8} {'WER':>5} {'repeats':>8} {'maxC':>5}")
 for k in order:
     rs = [r for r in runs[k] if not r["warmup"] and "error" not in r]

@@ -7,6 +7,7 @@
   B  first app, loaded:    Gemma in a persistent llama-server (prompt cache OFF) + preloaded voices
   C  second app:           Whisper int8 (5 s window) + NLLB int8, loaded once + preloaded voices
   D  C with the character-level ONNX voice (jq/sherpa-vits-tts-lug-eng) for English and Luganda
+  E  B (Gemma kept loaded) with the same ONNX voice
 
 Each clip is spoken in English or Luganda and translated into the other one, then spoken.
 Stages are timed identically in every setup: listen, translate, voice. One setup per
@@ -27,11 +28,12 @@ sys.path.insert(0, f"{HOME}/ml")
 sys.path.insert(0, f"{HOME}/ml/pipeline2")
 
 ap = argparse.ArgumentParser()
-ap.add_argument("config", choices=["A", "B", "C", "D"])
+ap.add_argument("config", choices=["A", "B", "C", "D", "E"])
 ap.add_argument("--clips", default=f"{HOME}/ml/bench_clips/clips.json")
 ap.add_argument("--repeat", type=int, default=1)
 ap.add_argument("--label", default=None, help="name for the result file (default: the config letter)")
 ap.add_argument("--cool", type=float, default=60.0, help="wait until the CPU is below this many C")
+ap.add_argument("--limit", type=int, default=0, help="use only the first N clips (0 = all six)")
 args = ap.parse_args()
 
 OUT_DIR = f"{HOME}/ml/bench_results"
@@ -43,6 +45,27 @@ os.makedirs(os.path.dirname(WAV_OUT), exist_ok=True)
 
 def cpu_temp():
     return int(open("/sys/class/thermal/thermal_zone0/temp").read()) / 1000
+
+
+def tree_rss_mb():
+    """Resident memory (MB) of this process and all its descendants (llama-server, voice worker...)."""
+    parent, rss = {}, {}
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            stat = open(f"/proc/{pid}/stat").read()
+            parent[int(pid)] = int(stat[stat.rindex(")") + 2:].split()[1])
+            for line in open(f"/proc/{pid}/status"):
+                if line.startswith("VmRSS:"):
+                    rss[int(pid)] = int(line.split()[1]) / 1024
+        except (OSError, ValueError):
+            pass
+    mine, changed = {os.getpid()}, True
+    while changed:
+        changed = False
+        for pid, ppid in parent.items():
+            if ppid in mine and pid not in mine:
+                mine.add(pid); changed = True
+    return round(sum(rss.get(pid, 0) for pid in mine))
 
 
 def throttled():
@@ -216,12 +239,31 @@ class SetupD(SetupC):
         pass
 
 
+class SetupE(SetupB):
+    """Setup B (Gemma kept loaded in llama-server) with the in-process character-level ONNX voice."""
+
+    def start_voices(self):
+        import sunflower_fast_ui as fast
+        t0 = time.time()
+        self.cv = fast.CharVoice()
+        return time.time() - t0
+
+    def speak(self, text, dst):
+        res = self.cv.speak(text, WAV_OUT)
+        return bool(res.get("ok")), {"path": "onnx", **res}
+
+    def close(self):
+        self.srv.terminate()
+
+
 # ---------------------------------------------------------------- run
 clips = json.load(open(args.clips))
+if args.limit:
+    clips = clips[:args.limit]
 waited = wait_cool()
 print(f"config {args.config}: waited {waited}s for cooldown, CPU {cpu_temp():.0f} C, flags {throttled()}", flush=True)
 t0 = time.time()
-setup = {"A": SetupA, "B": SetupB, "C": SetupC, "D": SetupD}[args.config]()
+setup = {"A": SetupA, "B": SetupB, "C": SetupC, "D": SetupD, "E": SetupE}[args.config]()
 print(f"setup ready: startup {setup.startup:.1f}s (models/voices loaded once; 0 for A)", flush=True)
 
 plan = []
@@ -257,6 +299,7 @@ with open(OUT_PATH, "a") as out:
             rec["error"] = f"{type(e).__name__}: {e}"[:200]
         rec["total_s"] = round(sum(rec["times"].values()), 2)
         rec["temp_end"], rec["throttled"] = round(cpu_temp()), throttled()
+        rec["rss_mb"] = tree_rss_mb()
         out.write(json.dumps(rec, ensure_ascii=False) + "\n")
         out.flush()
         tag = "warm-up" if warmup else "run    "

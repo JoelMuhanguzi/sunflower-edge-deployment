@@ -7,6 +7,10 @@ All Pi numbers below were measured on the Raspberry Pi 4 Model B Rev 1.5 (8GB RA
 
 Apart from the [pipeline comparison](#comparing-the-two-pipelines-part-6) just below (medians of six runs per setup), everything here is a single-sample measurement per configuration, not an average over many runs, except where noted (MMS-TTS). Edge-hardware benchmarks are noisy — see the variance note below — so treat single numbers as indicative, not precise.
 
+### Pi 4 and Pi 5 side by side (Part 8)
+
+The newest and cleanest numbers are in [Part 8](08-pi5-and-matched-rerun.md): the same six clips and scripts on a Pi 4 and a Pi 5, both headless from a cold boot, with Gemma's `llama-bench` (Pi 4: 5.99 prompt and 2.45 generation tokens/s; Pi 5: 40.17 and 7.80), a split of Whisper's and NLLB's time, int8 against float32, and resident memory per setup. `results/headtohead.csv` has every setup's medians in one table. The tables in the rest of this page are the earlier Pi 4 runs.
+
 ### Comparing the two pipelines (Part 6)
 
 Full method, caveats and raw data: [Part 6](06-fast-pipeline.md) and `results/pi4-headtohead-2026-10-06/`. The first pipeline (Gemma for listening and translating) is compared with the second (Whisper for listening, NLLB for translating) on the Pi 4, with the same six recorded 5 s clips (three English, three Luganda; one speaker) and identical stage timing. Medians in seconds; the benchmark waited up to 15 minutes for the CPU to fall below 60 °C before each setup, but per-clip start temperatures were 48–79 °C for setups A to C-final, so some runs were warm.

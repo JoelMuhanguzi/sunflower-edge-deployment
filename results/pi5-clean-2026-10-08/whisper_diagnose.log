@@ -1,0 +1,10 @@
+
+##### compute_type=int8  (load 17.9s)
+  window  6 s: total 10.09s = features 0.01 + encoder  1.78 + decoder/other  8.30   (14 tokens, 572 ms per token)
+  window 30 s: total 26.79s = features 0.00 + encoder 17.27 + decoder/other  9.52   (12 tokens, 793 ms per token)
+
+##### compute_type=int8_float32  (load 0.7s)
+  window  6 s: total 10.03s = features 0.01 + encoder  1.80 + decoder/other  8.22   (14 tokens, 567 ms per token)
+
+##### compute_type=float32  (load 3.4s)
+  window  6 s: total 37.84s = features 0.01 + encoder  5.86 + decoder/other 31.97   (14 tokens, 2205 ms per token)

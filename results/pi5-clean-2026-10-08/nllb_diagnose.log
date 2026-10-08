@@ -1,0 +1,25 @@
+None of PyTorch, TensorFlow >= 2.0, or Flax have been found. Models won't be available and only tokenizers, configuration and file/data utilities can be used.
+
+##### compute_type=int8  (load 19.2s)
+SPLIT  (forced output length N; time = fixed + per_token * N)
+  beam 5: N=2: 1.37s, N=8: 6.54s, N=16: 12.57s  ->  fixed (encoder + set-up) -0.23s, per token 800 ms
+  beam 1: N=2: 1.50s, N=8: 4.42s, N=16: 8.54s  ->  fixed (encoder + set-up) 0.49s, per token 503 ms
+SENTENCES  (beams alternated per sentence)
+  beam 5: median 11.93s   per sentence: 10.42, 12.97, 12.88, 12.37, 11.48, 6.22
+  beam 1: median 7.27s   per sentence: 7.04, 7.93, 7.83, 7.50, 6.93, 4.12
+
+##### compute_type=int8_float32  (load 1.3s)
+SPLIT  (forced output length N; time = fixed + per_token * N)
+  beam 5: N=2: 1.61s, N=8: 5.96s, N=16: 11.87s  ->  fixed (encoder + set-up) 0.14s, per token 734 ms
+  beam 1: N=2: 1.52s, N=8: 4.39s, N=16: 8.44s  ->  fixed (encoder + set-up) 0.53s, per token 495 ms
+SENTENCES  (beams alternated per sentence)
+  beam 5: median 11.46s   per sentence: 10.48, 12.43, 12.78, 12.27, 10.65, 6.24
+  beam 1: median 7.22s   per sentence: 7.04, 7.81, 8.37, 7.40, 6.62, 3.73
+
+##### compute_type=float32  (load 3.0s)
+SPLIT  (forced output length N; time = fixed + per_token * N)
+  beam 5: N=2: 4.60s, N=8: 14.67s, N=16: 28.59s  ->  fixed (encoder + set-up) 1.17s, per token 1713 ms
+  beam 1: N=2: 4.44s, N=8: 13.97s, N=16: 26.65s  ->  fixed (encoder + set-up) 1.27s, per token 1586 ms
+SENTENCES  (beams alternated per sentence)
+  beam 5: median 27.56s   per sentence: 25.38, 29.86, 29.86, 28.20, 26.92, 15.08
+  beam 1: median 23.60s   per sentence: 22.23, 28.10, 26.45, 24.86, 22.34, 12.50

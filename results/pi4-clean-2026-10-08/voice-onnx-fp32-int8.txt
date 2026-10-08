@@ -1,0 +1,15 @@
+-- start temp=59.9'C throttled=0x80000
+vits-lug-eng.fp32.onnx load: 5.43s
+eng 5 words, 1.5s audio: 2.96s, 3.55s, 3.28s  (first 2.96s = 1.97x real time)
+eng 14 words, 4.1s audio: 10.03s, 7.17s, 8.79s  (first 10.03s = 2.47x real time)
+lug 5 words, 2.3s audio: 4.38s, 4.54s, 4.97s  (first 4.38s = 1.90x real time)
+lug 10 words, 3.7s audio: 6.39s, 6.73s, 7.98s  (first 6.39s = 1.73x real time)
+-- end temp=76.9'C throttled=0x80000
+-- start temp=59.4'C throttled=0x80000
+vits-lug-eng.int8.onnx load: 4.53s
+eng 5 words, 1.5s audio: 12.59s, 14.48s, 13.26s  (first 12.59s = 8.28x real time)
+eng 14 words, 3.4s audio: 31.06s, 32.51s, 30.02s  (first 31.06s = 9.16x real time)
+lug 5 words, 2.1s audio: 17.73s, 19.37s, 18.18s  (first 17.73s = 8.44x real time)
+lug 10 words, 4.1s audio: 28.85s, 28.31s, 35.39s  (first 28.85s = 7.04x real time)
+-- end temp=66.2'C throttled=0x80000
+VOICE_DONE
