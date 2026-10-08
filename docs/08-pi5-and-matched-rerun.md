@@ -60,6 +60,8 @@ The setups are those of Part 6 plus two: **A** the first app as originally built
 | Pi 5 | **40.17 ± 0.02** tokens/s | **7.80 ± 0.02** tokens/s |
 | Ratio | 6.7× | 3.2× |
 
+The other four quantization levels were also measured on the Pi 5 (Q4_0 7.80, Q5_K_M 6.56, Q6_K 6.15, Q8_0 4.44 tokens/s generation); the full table with prompt speed and peak memory is in the [quantization comparison](quantization-sweep.md#speed-and-memory-on-the-raspberry-pi-5).
+
 **Whisper int8, one clip, the app's settings** (`whisper_diagnose.py`; features, encoder and decoder timed separately):
 
 | Window | Compute type | Total | Features | Encoder | Decoder | Per token |

@@ -119,6 +119,24 @@ What the sample shows: the top levels mostly agree with each other, **including 
 - Q8_0 would still fit (4.96 GB of 7.6 GB), but with the 1 GB audio encoder loaded it would run tighter than the others.
 - The repeat-to-repeat spread here is tiny (±0.01–0.02), much tighter than the TTS timings elsewhere in these docs. These are controlled benchmark runs on an otherwise idle device; the app on screen will be a little slower.
 
+## Speed and memory on the Raspberry Pi 5
+
+The same `llama-bench` measurement (CPU only, 4 threads, 64-token prompt, 32 generated tokens, 3 repetitions, mean ± standard deviation; llama.cpp `a7b94df`, the same commit as the Pi 4 rows) on a **Raspberry Pi 5** (8 GB, active cooler, 5.1 V / 5 A supply, desktop stopped, CPU below 55 °C at the start of each level, never throttled). Peak RAM is the process's peak resident memory, in the same units as the Pi 4 table. Raw data: `results/pi5-clean-2026-10-08/quant-sweep/` (`scripts/quant-sweep/bench-one-pi.sh`); both boards in `results/quant-speed.csv`.
+
+| Level | Size | Prompt (tok/s) | Generation (tok/s) | Peak RAM | Pi 4 prompt / generation |
+|---|---:|---:|---:|---:|---:|
+| Q4_0 | 3.35 GB | **68.73 ± 0.13** | **7.80 ± 0.01** | 4.75 GB | 5.79 / 2.52 |
+| **Q4_K_M** | 3.42 GB | 40.10 ± 0.04 | 7.79 ± 0.01 | 4.88 GB | 5.99 / 2.45 |
+| Q5_K_M | 3.62 GB | 34.35 ± 0.07 | 6.56 ± 0.01 | 5.27 GB | 4.84 / 1.97 |
+| Q6_K | 3.83 GB | 35.17 ± 0.05 | 6.15 ± 0.01 | 5.69 GB | 4.52 / 1.93 |
+| Q8_0 | 4.95 GB | 27.11 ± 0.07 | 4.44 ± 0.01 | 7.12 GB | 5.84 / 1.47 |
+
+- **Generation speed again falls as the file grows**, from 7.8 to 4.4 tokens/s, and Q4_K_M generates as fast as Q4_0 (7.79 and 7.80; on the Pi 4 Q4_0 was 3% ahead). Generation speed multiplied by file size is roughly constant on each board (22–27 on the Pi 5, 7–8 on the Pi 4), which fits decoding being limited by memory reads, the explanation suggested for the Pi 4; we did not measure memory traffic.
+- **The Pi 5 is 3.0–3.3× faster at generation than the Pi 4 at every level, and 4.6–11.9× faster at reading the prompt.** The prompt gain differs a lot by level: Q4_0 gains 11.9×, Q8_0 only 4.6×.
+- **Q4_0 reads the prompt 1.7× faster than Q4_K_M on the Pi 5** (68.7 against 40.1 tokens/s) but not on the Pi 4 (5.8 against 6.0). A likely reason is that llama.cpp has ARM kernels for Q4_0 that use the dot-product instructions only the Pi 5 has; we did not check.
+- **Peak RAM is 1.35 to 2.2 GB higher on the Pi 5 than on the Pi 4 for the same file** (Q4_K_M 4.88 against 3.47 GB), measured the same way. We do not know why. Q8_0 peaks at **7.12 GB of the 8.06 GB** the board has, so with the 0.99 GB audio encoder loaded it would not fit; Q6_K (5.69 GB) would.
+- **Choosing a level is unchanged:** Q4_K_M still has the best quality-for-size in the translation comparison above, and on the Pi 5 it costs nothing in generation speed against Q4_0. Q4_0's faster prompt reading would only matter for long prompts; the apps send short ones.
+
 ## Choosing a level
 
 | If you want | Pick |

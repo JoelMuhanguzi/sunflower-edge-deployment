@@ -1,0 +1,11 @@
+device,level,size_gb,prompt_tok_s,prompt_sd,gen_tok_s,gen_sd,peak_ram_gb,gen_x_size,source
+Pi 4,Q4_0,3.35,5.79,0.02,2.52,0.01,3.4,8.4,results/quant-sweep/pi-bench/Q4_0.json
+Pi 4,Q4_K_M,3.42,5.99,0.02,2.45,0.01,3.47,8.4,results/quant-sweep/pi-bench/Q4_K_M.json
+Pi 4,Q5_K_M,3.62,4.84,0.01,1.97,0.01,3.66,7.1,results/quant-sweep/pi-bench/Q5_K_M.json
+Pi 4,Q6_K,3.83,4.52,0.01,1.93,0.0,3.87,7.4,results/quant-sweep/pi-bench/Q6_K.json
+Pi 4,Q8_0,4.95,5.84,0.02,1.47,0.01,4.96,7.3,results/quant-sweep/pi-bench/Q8_0.json
+Pi 5,Q4_0,3.35,68.73,0.13,7.8,0.01,4.75,26.1,results/pi5-clean-2026-10-08/quant-sweep/Q4_0.json
+Pi 5,Q4_K_M,3.42,40.1,0.04,7.79,0.01,4.88,26.6,results/pi5-clean-2026-10-08/quant-sweep/Q4_K_M.json
+Pi 5,Q5_K_M,3.62,34.35,0.07,6.56,0.01,5.27,23.7,results/pi5-clean-2026-10-08/quant-sweep/Q5_K_M.json
+Pi 5,Q6_K,3.83,35.17,0.05,6.15,0.01,5.69,23.6,results/pi5-clean-2026-10-08/quant-sweep/Q6_K.json
+Pi 5,Q8_0,4.95,27.11,0.07,4.44,0.01,7.12,22.0,results/pi5-clean-2026-10-08/quant-sweep/Q8_0.json

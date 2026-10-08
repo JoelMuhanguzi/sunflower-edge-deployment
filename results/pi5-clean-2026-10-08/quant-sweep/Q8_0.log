@@ -1,0 +1,3 @@
+pi: Raspberry Pi 5 Model B Rev 1.1  kernel: 6.18.50+rpt-rpi-2712  llama.cpp: a7b94df
+=== Q8_0  start 13:36:19  temp temp=50.5'C  throttled throttled=0x0
+=== Q8_0  done  13:36:56  temp temp=57.6'C  throttled throttled=0x0  peak_rss_kb 7120816

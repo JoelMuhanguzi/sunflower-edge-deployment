@@ -112,7 +112,7 @@ The Gemma model card's own evaluation (full-precision weights; not re-measured f
 
 | | |
 |---|---|
-| **[Key findings](docs/findings.md)** | The 43 non-obvious lessons, one page |
+| **[Key findings](docs/findings.md)** | The 44 non-obvious lessons, one page |
 | [Part 1: text model](docs/01-text-model.md) | Convert, quantize, deploy (Steps 1–10) |
 | [Part 2: audio input](docs/02-audio-input.md) | Speech understanding via llama.cpp's multimodal projector (Steps 11–13) |
 | [Part 3: text-to-speech](docs/03-text-to-speech.md) | Three TTS approaches tried; two kept (Steps 14–18) |
