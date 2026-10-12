@@ -8,6 +8,8 @@ Two pipelines were built and compared on the same device:
 - **The second app, "Sunflower Fast"** swaps that for Sunbird's smaller specialist models, a Whisper-based speech recogniser and an NLLB translator, kept loaded in memory, and speaks English and Luganda with a small character-level ONNX voice. On the Pi 4 it took **a median 41 s per spoken round trip against 122 s** for the first app as originally built (Part 6).
 - **A third app, "Sunflower Chat"**, is for conversation with Gemma: speak or type a question and read the reply as it streams in (Part 7).
 
+The Gemma apps (first app and chat) speak English and Luganda with the same ONNX voice when launched with the `pipeline2` Python environment (the desktop launchers do this and fall back to the Sunbird VITS voices if it is missing); `SUNFLOWER_VOICE=vits` switches back.
+
 All of it was measured on a **Raspberry Pi 4 and, in Part 8, a Raspberry Pi 5** under matching conditions. On the Pi 5 the fastest setup (Gemma kept loaded) takes **12 s per spoken round trip** against 63–66 s on the Pi 4, and the Whisper + NLLB pipeline takes 17–20 s against 37–40 s.
 
 This repository is a reproducible **log of how that was done**, including the dead ends. The Gemma repository ships only a 10 GB full-precision checkpoint, so much of the work was quantizing it, adding audio input and speech output, and making it usable on a small touchscreen. Part 6 then asked whether the specialist models do better and measured both pipelines on the same recordings.
@@ -94,7 +96,7 @@ All on disk, as used on the Pi 4. Nothing here is stored in this repository.
 | Audio encoder for Gemma | mmproj from the same model | F16 | 0.99 GB | first app |
 | Listening | Sunbird SunflowerASR-51 (Whisper large-v3 fine-tune), converted with CTranslate2 | int8 (float32 original: 6.17 GB) | 1.56 GB | second app |
 | Translating | Sunbird NLLB-1.3B (SALT), CTranslate2 | int8 | 1.38 GB | second app |
-| Voice, English and Luganda | [jq/sherpa-vits-tts-lug-eng](https://huggingface.co/jq/sherpa-vits-tts-lug-eng), character-level VITS in ONNX | fp32 (an int8 copy we made is 38 MB and slower) | 109 MB | second app |
+| Voice, English and Luganda | [jq/sherpa-vits-tts-lug-eng](https://huggingface.co/jq/sherpa-vits-tts-lug-eng), character-level VITS in ONNX | fp32 (an int8 copy we made is 38 MB and slower) | 109 MB | second app; the first app and chat too, when run under the `pipeline2` Python (they fall back to Sunbird VITS otherwise) |
 | Voice, per language | Sunbird VITS (English, Luganda, Runyankole) | fp32 | 145 MB, 450 MB, ~450 MB | first app; second app for Runyankole |
 | Voice, other languages | Meta MMS-TTS | fp32 | 139 MB each | both apps |
 

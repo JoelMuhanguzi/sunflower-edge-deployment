@@ -37,6 +37,16 @@ SPEAKER_DEVICE = os.environ.get("SUNFLOWER_SPEAKER", "plughw:2,0")
 RECORD_SECONDS = 5
 MIC_GAIN_PERCENT = 62
 PRELOADED_VOICES = ("English", "Luganda")  # kept in memory by the worker
+# English and Luganda are spoken by the small ONNX voice (char_voice.py) when this runs under a Python that
+# has onnxruntime and scipy (the pipeline2 venv, as the launcher does); otherwise by the Sunbird VITS worker.
+try:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from char_voice import CharVoice, CHAR_VOICE_LANGS, USE_CHAR_VOICE
+    import numpy, scipy, onnxruntime  # noqa: F401  (fail here, not on the first tap)
+except Exception as _e:  # no onnxruntime/scipy under this Python: use the Sunbird VITS worker
+    print("ONNX voice not available under this Python:", repr(_e), flush=True)
+    CharVoice, CHAR_VOICE_LANGS, USE_CHAR_VOICE = None, (), False
 MIN_FREE_GB = 5.0  # Gemma server + voices need about this much; Sunflower Fast must be closed first
 
 SCRATCH = f"{HOME}/ml/demo_scratch"
@@ -223,6 +233,7 @@ class SunflowerApp:
 
         self.server = None
         self.vits = None
+        self.char_voice = None
         self.last_voice = {}
         self.busy = True
         self.record_btn.config(state="disabled", bg="#555")
@@ -238,10 +249,16 @@ class SunflowerApp:
         try:
             self.server = GemmaServer()
             self.set_status("Loading voices (English, Luganda)...")
-            try:
-                self.vits = VitsWorker([LANGUAGES[n]["dir"] for n in PRELOADED_VOICES])
-            except Exception as e:  # fall back to loading a voice on every tap
-                print("voice worker unavailable:", repr(e), flush=True)
+            if USE_CHAR_VOICE and CharVoice is not None:
+                try:
+                    self.char_voice = CharVoice()
+                except Exception as e:  # fall back to the Sunbird VITS worker
+                    print("ONNX voice unavailable:", repr(e), flush=True)
+            if self.char_voice is None:
+                try:
+                    self.vits = VitsWorker([LANGUAGES[n]["dir"] for n in PRELOADED_VOICES])
+                except Exception as e:  # fall back to loading a voice on every tap
+                    print("voice worker unavailable:", repr(e), flush=True)
         except Exception as e:
             self.set_status(f"Model load failed: {type(e).__name__}")
             print("model load failed:", repr(e), flush=True)
@@ -516,6 +533,14 @@ class SunflowerApp:
 
     def _speak(self, text, lang_name, out_path):
         """Use the preloaded worker for English/Luganda; otherwise (or on error) load per tap."""
+        if self.char_voice and lang_name in CHAR_VOICE_LANGS:
+            try:
+                res = self.char_voice.speak(text, out_path)
+                self.last_voice = {"path": "onnx", **res}
+                if res.get("ok"):
+                    return True
+            except Exception as e:
+                self.last_voice = {"path": "onnx", "ok": False, "error": repr(e)[:150]}
         if self.vits and lang_name in PRELOADED_VOICES:
             try:
                 res = self.vits.speak(LANGUAGES[lang_name]["dir"], text, out_path)

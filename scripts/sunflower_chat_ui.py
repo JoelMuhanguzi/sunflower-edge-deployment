@@ -79,6 +79,8 @@ class ChatApp:
         self.history = []               # [{"role": "user"|"assistant", "content": text}]
         self.server = None
         self.vits = None
+        self.char_voice = None
+        self.char_voice_failed = False
         self.busy = True
 
         self._build_ui()
@@ -392,6 +394,22 @@ class ChatApp:
             time.sleep(0.5)
             return
         try:
+            if (lang in base.CHAR_VOICE_LANGS and base.USE_CHAR_VOICE and base.CharVoice is not None
+                    and self.char_voice is None and not self.char_voice_failed):
+                self.set_status("Loading voice...")
+                try:
+                    self.char_voice = base.CharVoice()
+                except Exception as e:  # fall back to the Sunbird VITS voices
+                    print("ONNX voice unavailable:", repr(e), flush=True)
+                    self.char_voice_failed = True
+            if self.char_voice and lang in base.CHAR_VOICE_LANGS:
+                self.set_status(f"Speaking ({lang})...")
+                ok = bool(self.char_voice.speak(text, out_path).get("ok"))
+                if ok:
+                    base.play_audio(out_path)
+                rec["voice_s"] = round(time.perf_counter() - t0, 2)
+                self.set_status(f"Done | voice {rec['voice_s']}s")
+                return
             if lang in base.PRELOADED_VOICES and self.vits is None:
                 self.set_status("Loading voices (English, Luganda)...")
                 self.vits = base.VitsWorker([base.LANGUAGES[n]["dir"] for n in base.PRELOADED_VOICES])

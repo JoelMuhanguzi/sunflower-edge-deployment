@@ -3,7 +3,7 @@ Version=1.0
 Type=Application
 Name=Sunflower Chat
 Comment=Talk or type to Sunflower-Gemma4-E2B
-Exec=python3 __HOME__/ml/sunflower_chat_ui.py
+Exec=sh -c 'P=__HOME__/ml/pipeline2/venv/bin/python; [ -x "$P" ] || P=python3; exec "$P" __HOME__/ml/sunflower_chat_ui.py'
 Icon=__HOME__/ml/assets/sunflower-icon.png
 Terminal=false
 Categories=Utility;
