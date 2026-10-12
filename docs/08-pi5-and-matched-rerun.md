@@ -113,6 +113,12 @@ On the Pi 5 the voice is faster than real time at fp32. int8 stays 3 to 6 times 
 
 The Gemma setups hold about 4.3 GB in the server plus the voices; the ONNX voice is about 0.6 GB lighter than the Sunbird VITS worker (which loads PyTorch). All fit in 8 GB; B leaves about 1.4 GB.
 
+## The touchscreen on the Pi 5
+
+The 3.5" SPI touchscreen from the Pi 4 works on the Pi 5 with the same stock `piscreen` overlay (`dtparam=spi=on` and `dtoverlay=piscreen,drm,speed=32000000,fps=30` in `/boot/firmware/config.txt`, then a reboot; the `scripts/setup-pi.sh` display step does this). The kernel registers the panel as an ILI9486 DRM device and the touch controller as `ADS7846 Touchscreen`, and the desktop uses the SPI panel as its only output at 480×320.
+
+The one difference was the touch rule. The Pi 4 rule matched the device by its hardware path (`platform-fe204000.spi-cs-1`), which is the Pi 4's SPI controller; on the Pi 5 the SPI bus is behind the RP1 chip, so the rule silently did nothing and taps came out mirrored. `scripts/pi/90-touchscreen-flip-y.rules` now matches the device by name (`ADS7846 Touchscreen`) and works on both boards. After installing it, taps landed within a few pixels of where they were expected (left edge middle at x=33, y=174; top edge middle at x=236, y=29 on the 480×320 screen). The vendor's `LCD-show` script was read and **not** run: it targets older X11-based Pi OS and Pi models up to the 4B.
+
 ## The Pi 5's GPU
 
 The VideoCore VII supports OpenGL ES and Vulkan, not CUDA, and as far as we know not OpenCL. ONNX Runtime and CTranslate2 (which Whisper and NLLB use) have no backend for it, so those models cannot use it. llama.cpp has a Vulkan backend that could in principle run Gemma; **we did not test it** and have no evidence it would beat the CPU (the GPU shares the same memory). The GPU drives the display only.
