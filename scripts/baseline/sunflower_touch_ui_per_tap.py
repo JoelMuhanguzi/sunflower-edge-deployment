@@ -20,8 +20,8 @@ VITS_DIR = f"{HOME}/ml/vits-work/training"
 VITS_VENV_PY = f"{HOME}/ml/vits-venv/bin/python"
 TTS_VENV_PY = f"{HOME}/ml/tts-venv/bin/python"
 
-MIC_DEVICE = "plughw:3,0"
-SPEAKER_DEVICE = "plughw:2,0"
+MIC_DEVICE = os.environ.get("SUNFLOWER_MIC", "plughw:3,0")  # card numbers differ per board: see docs/08
+SPEAKER_DEVICE = os.environ.get("SUNFLOWER_SPEAKER", "plughw:2,0")
 RECORD_SECONDS = 5
 MIC_GAIN_PERCENT = 62
 
