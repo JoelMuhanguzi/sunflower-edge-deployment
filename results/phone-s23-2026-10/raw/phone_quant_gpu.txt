@@ -1,0 +1,38 @@
+[01:16:44] === Q4_0: pushing (temperature:424)
+[01:18:09] === Q4_0: llama-bench, language model on CPU (ngl 0) vs GPU (ngl 99); 64-token prompt, 32 generated, 3 repetitions
+| model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+| gemma4 E2B Q4_0                |   3.10 GiB |     4.63 B | OpenCL     |   0 |       4 |            pp64 |         75.59 ± 1.43 |
+| gemma4 E2B Q4_0                |   3.10 GiB |     4.63 B | OpenCL     |   0 |       4 |            tg32 |         15.56 ± 0.70 |
+| gemma4 E2B Q4_0                |   3.10 GiB |     4.63 B | OpenCL     |  99 |       4 |            pp64 |         27.32 ± 1.00 |
+| gemma4 E2B Q4_0                |   3.10 GiB |     4.63 B | OpenCL     |  99 |       4 |            tg32 |         10.98 ± 1.01 |
+[01:18:50]     battery after: temperature:422
+[01:19:36] === Q8_0: pushing (temperature:424)
+[01:21:38] === Q8_0: llama-bench, language model on CPU (ngl 0) vs GPU (ngl 99); 64-token prompt, 32 generated, 3 repetitions
+| model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+| gemma4 E2B Q8_0                |   4.59 GiB |     4.63 B | OpenCL     |   0 |       4 |            pp64 |        108.92 ± 1.68 |
+| gemma4 E2B Q8_0                |   4.59 GiB |     4.63 B | OpenCL     |   0 |       4 |            tg32 |         14.36 ± 0.43 |
+| gemma4 E2B Q8_0                |   4.59 GiB |     4.63 B | OpenCL     |  99 |       4 |            pp64 |         17.14 ± 1.26 |
+| gemma4 E2B Q8_0                |   4.59 GiB |     4.63 B | OpenCL     |  99 |       4 |            tg32 |          7.05 ± 0.85 |
+[01:22:45]     battery after: temperature:411
+[01:23:31] === Q5_K_M: pushing (temperature:415)
+[01:25:05] === Q5_K_M: llama-bench, language model on CPU (ngl 0) vs GPU (ngl 99); 64-token prompt, 32 generated, 3 repetitions
+| model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+| gemma4 E2B Q5_K - Medium       |   3.35 GiB |     4.63 B | OpenCL     |   0 |       4 |            pp64 |         38.56 ± 0.49 |
+| gemma4 E2B Q5_K - Medium       |   3.35 GiB |     4.63 B | OpenCL     |   0 |       4 |            tg32 |         10.27 ± 0.27 |
+| gemma4 E2B Q5_K - Medium       |   3.35 GiB |     4.63 B | OpenCL     |  99 |       4 |            pp64 |         29.02 ± 2.72 |
+| gemma4 E2B Q5_K - Medium       |   3.35 GiB |     4.63 B | OpenCL     |  99 |       4 |            tg32 |          2.94 ± 0.11 |
+[01:26:21]     battery after: temperature:419
+[01:27:07] === Q6_K: pushing (temperature:420)
+[01:28:47] === Q6_K: llama-bench, language model on CPU (ngl 0) vs GPU (ngl 99); 64-token prompt, 32 generated, 3 repetitions
+| model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+| gemma4 E2B Q6_K                |   3.55 GiB |     4.63 B | OpenCL     |   0 |       4 |            pp64 |         38.23 ± 0.18 |
+| gemma4 E2B Q6_K                |   3.55 GiB |     4.63 B | OpenCL     |   0 |       4 |            tg32 |          9.52 ± 0.31 |
+| gemma4 E2B Q6_K                |   3.55 GiB |     4.63 B | OpenCL     |  99 |       4 |            pp64 |         24.12 ± 1.94 |
+| gemma4 E2B Q6_K                |   3.55 GiB |     4.63 B | OpenCL     |  99 |       4 |            tg32 |          2.82 ± 0.20 |
+[01:30:09]     battery after: temperature:420
+[01:30:55] done
+PHONE_QUANT_GPU_DONE

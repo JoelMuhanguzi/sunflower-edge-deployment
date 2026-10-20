@@ -1,0 +1,24 @@
+[01:01:03] building llama-server for the KleidiAI variant
+[01:02:08] pushed; battery temperature:379; starting server
+[01:02:17] server ready after 9 s; running the six clips
+warm-up eng_1.wav listen 7.63s translate 1.76s | WER 0.0 | heard='The hospital is near the market'
+run     eng_1.wav listen 8.47s translate 1.83s | WER 0.0 | heard='The hospital is near the market'
+run     eng_2.wav listen 8.47s translate 2.45s | WER 0.0 | heard='My name is Joel. I am happy to see you.'
+run     eng_3.wav listen 8.41s translate 2.6s | WER 0.0 | heard='I am very sick. Please take me to the hospital'
+run     lug_4.wav listen 9.4s translate 1.98s | WER 0.8 | heard='Oli otya leero, ntya nyi sso okulaba?'
+run     lug_5.wav listen 9.24s translate 1.92s | WER 0.17 | heard='Ndi mulwadde nnyo twala mu ddwaliro.'
+run     lug_6.wav listen 8.75s translate 1.49s | WER 0.0 | heard='Abaana bagenda ku ssomero.'
+MEDIAN listen 8.6s translate 1.9s total 11.0s | mean WER 0.16 | n=6
+[01:03:32] battery after clips: temperature:387
+[01:03:37] sustained generation run (12 repetitions of 256 tokens, 4 threads); battery temperature:388
+  t+30s battery temperature:391
+  t+60s battery temperature:396
+  t+90s battery temperature:400
+  t+120s battery temperature:403
+  t+150s battery temperature:406
+  t+180s battery temperature:409
+  t+210s battery temperature:412
+  t+240s battery temperature:414
+[01:08:26] sustained run done; battery temperature:417
+SUSTAINED tg256 tokens/s per repetition: [13.3, 11.9, 11.4, 11.0, 11.1, 10.5, 11.2, 10.7, 10.0, 9.8, 9.8, 10.2] | first 3 avg 12.2, last 3 avg 9.9
+PHONE_SPEECH_DONE

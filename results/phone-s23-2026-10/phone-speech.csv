@@ -1,0 +1,5 @@
+configuration,audio_encoder_on,language_model_on,median_listen_s,median_translate_s,median_total_s,mean_WER,clips,notes
+KleidiAI CPU build,CPU,CPU,8.6,1.9,11.0,0.16,6,after 1 warm-up clip
+OpenCL build cpu_all,CPU,CPU,8.9,1.9,11.3,0.16,6,
+OpenCL build encoder_gpu,GPU,CPU,7.0,2.1,9.3,0.13,6,best: encoder on Adreno speeds listening ~20%
+OpenCL build all_gpu,GPU,GPU,21.6,15.0,~37,,3,language model on GPU: ~3x slower; server crashed on 4th clip

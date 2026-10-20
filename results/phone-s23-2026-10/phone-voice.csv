@@ -1,0 +1,5 @@
+model,onnxruntime_provider,eng_23chars_s,eng_68chars_s,lug_33chars_s,lug_55chars_s,notes
+vits-lug-eng.fp32,CPU,0.71,1.92,1.17,1.77,median of 3; 22050 Hz output
+vits-lug-eng.fp32,XNNPACK,0.74,1.96,1.14,1.69,no gain over CPU
+vits-lug-eng.fp32,NNAPI,0.72,1.85,1.15,1.73,no gain over CPU
+vits-lug-eng.int8,CPU,0.29,0.81,0.48,0.78,~2.5x faster than fp32 on the phone (opposite of Pi 4 / Pi 5 where int8 was slower)

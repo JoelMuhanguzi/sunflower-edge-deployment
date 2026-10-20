@@ -1,0 +1,111 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffaa28"><title>Sunflower</title>
+<style>
+:root{--bg:#1a1a1a;--panel:#252525;--fg:#f0f0f0;--muted:#a8a8a8;--accent:#ffaa28;--ok:#6ccf7c;--bad:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,-apple-system,sans-serif;
+padding:env(safe-area-inset-top) 16px 24px;max-width:560px;margin-inline:auto}
+h1{font-size:20px;margin:16px 0 4px}.sub{color:var(--muted);font-size:13px;margin-bottom:14px}
+.row{display:flex;gap:8px;align-items:center;margin:8px 0}select,input,button{font:inherit;color:var(--fg);background:var(--panel);
+border:1px solid #3a3a3a;border-radius:10px;padding:10px 12px}select{flex:1}button{cursor:pointer}
+#talk{width:100%;background:var(--accent);color:#1a1a1a;font-weight:700;font-size:20px;padding:18px;border:0;border-radius:14px;margin:10px 0}
+#talk:disabled{background:#555;color:#999}.card{background:var(--panel);border-radius:12px;padding:12px 14px;margin:10px 0}
+.lab{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}.txt{font-size:19px;min-height:26px;word-break:break-word}
+#status{color:var(--muted);font-size:14px;min-height:20px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#777;margin-right:6px}
+.bar{height:6px;background:#333;border-radius:3px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .1s linear}
+table{width:100%;font-size:14px;border-collapse:collapse}td{padding:3px 0}td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+</style></head><body>
+<h1>🌻 Sunflower</h1><div class="sub"><span class="dot" id="dot"></span><span id="srv">checking the on-phone models…</span></div>
+<div class="row"><select id="src"></select><button id="swap" aria-label="swap languages">⇄</button><select id="dst"></select></div>
+<button id="talk" disabled>Tap and speak (5 s)</button>
+<div class="bar"><i id="prog"></i></div><div id="status">Loading…</div>
+<div class="row"><input id="typed" placeholder="…or type text to translate" style="flex:1"><button id="go">Translate</button></div>
+<div class="card"><div class="lab">Heard</div><div class="txt" id="heard"></div></div>
+<div class="card"><div class="lab">Translation</div><div class="txt" id="out"></div>
+<div class="row"><button id="replay">🔊 Play again</button><label style="color:var(--muted);font-size:14px"><input type="checkbox" id="say" checked> speak it</label></div></div>
+<div class="card"><table id="t"><tr><td>Recording</td><td id="t0">–</td></tr><tr><td>Listening (Gemma)</td><td id="t1">–</td></tr>
+<tr><td>Translating (Gemma)</td><td id="t2">–</td></tr><tr><td>Voice (ONNX)</td><td id="t3">–</td></tr><tr><td><b>Total</b></td><td id="t4"><b>–</b></td></tr></table></div>
+<div class="sub">Runs entirely on this phone. Voice: English and Luganda. Other languages are text only.</div>
+<script>
+const LANGS=["English","Luganda","Runyankole","Acholi","Swahili"], VOICE=["English","Luganda"];
+const $=id=>document.getElementById(id); let busy=false, lastWav=null, actx=null;
+for(const s of [$("src"),$("dst")]) for(const l of LANGS) s.add(new Option(l,l));
+$("src").value="English"; $("dst").value="Luganda";
+$("swap").onclick=()=>{const a=$("src").value;$("src").value=$("dst").value;$("dst").value=a};
+const set=t=>$("status").textContent=t, secs=x=>x.toFixed(1)+" s";
+function ctx(){ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==="suspended") actx.resume(); return actx; }
+async function health(){
+  let llm=false, tts=false;
+  try{ llm=(await fetch("/health",{cache:"no-store"})).ok; }catch(e){}
+  try{ tts=(await fetch("http://127.0.0.1:8082/health",{cache:"no-store"})).ok; }catch(e){}
+  $("dot").style.background= llm&&tts ? "var(--ok)" : llm ? "var(--accent)" : "var(--bad)";
+  $("srv").textContent = llm&&tts ? "language model and voice ready (on this phone)" : llm ? "language model ready, voice server not running" : "language model not ready";
+  if(!busy){ $("talk").disabled=!llm; if(llm) set("Ready."); }
+  return llm;
+}
+function wavFromFloat(f32, rate){
+  const n=f32.length, b=new ArrayBuffer(44+n*2), v=new DataView(b), w=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));
+  w(0,"RIFF");v.setUint32(4,36+n*2,true);w(8,"WAVEfmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);
+  v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,n*2,true);
+  for(let i=0;i<n;i++){const s=Math.max(-1,Math.min(1,f32[i]));v.setInt16(44+i*2,s<0?s*0x8000:s*0x7fff,true)}
+  return new Uint8Array(b);
+}
+function b64(u8){let s="";for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+async function record(sec){
+  const stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:true}});
+  const rec=new MediaRecorder(stream), chunks=[]; rec.ondataavailable=e=>chunks.push(e.data);
+  const done=new Promise(r=>rec.onstop=r); rec.start();
+  const t0=performance.now();
+  await new Promise(res=>{ const iv=setInterval(()=>{ const p=Math.min(1,(performance.now()-t0)/(sec*1000)); $("prog").style.width=(p*100)+"%";
+    if(p>=1){clearInterval(iv);res()} },80); });
+  rec.stop(); await done; stream.getTracks().forEach(t=>t.stop()); $("prog").style.width="0";
+  return new Blob(chunks,{type:rec.mimeType});
+}
+async function to16kWav(blob){
+  const c=ctx(), buf=await c.decodeAudioData(await blob.arrayBuffer());
+  const off=new OfflineAudioContext(1,Math.max(1,Math.ceil(buf.duration*16000)),16000);
+  const src=off.createBufferSource(); src.buffer=buf; src.connect(off.destination); src.start();
+  const r=await off.startRendering(); return wavFromFloat(r.getChannelData(0),16000);
+}
+async function chat(content){
+  const t=performance.now();
+  const r=await fetch("/v1/chat/completions",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({messages:[{role:"user",content}],max_tokens:128,temperature:0.3,cache_prompt:false})});
+  if(!r.ok) throw new Error("model server: HTTP "+r.status);
+  const j=await r.json(); return [j.choices[0].message.content.trim(), (performance.now()-t)/1000];
+}
+async function speak(text){
+  const t=performance.now();
+  const r=await fetch("http://127.0.0.1:8082/tts",{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({text})});
+  if(!r.ok) throw new Error("voice server: HTTP "+r.status);
+  lastWav=await r.arrayBuffer(); const dt=(performance.now()-t)/1000; await play(); return dt;
+}
+async function play(){ if(!lastWav) return; const c=ctx(), b=await c.decodeAudioData(lastWav.slice(0));
+  const s=c.createBufferSource(); s.buffer=b; s.connect(c.destination); s.start(); }
+$("replay").onclick=()=>play();
+async function translateText(text, src, dst, tAll, times){
+  set("Translating…"); const [tr,t2]=await chat("Translate to "+dst+": "+text.split(/\s+/).join(" "));
+  $("out").textContent=tr; times.t2=t2; $("t2").textContent=secs(t2);
+  if($("say").checked && VOICE.includes(dst)){ set("Speaking…"); times.t3=await speak(tr); $("t3").textContent=secs(times.t3); }
+  else $("t3").textContent=VOICE.includes(dst)?"off":"text only";
+  const tot=(performance.now()-tAll)/1000; $("t4").innerHTML="<b>"+secs(tot)+"</b>"; set("Done.");
+}
+async function run(fn){ if(busy) return; busy=true; $("talk").disabled=true; $("go").disabled=true;
+  try{ await fn(); }catch(e){ set("Error: "+(e.message||e)); } busy=false; $("go").disabled=false; await health(); }
+$("talk").onclick=()=>run(async()=>{
+  ctx(); const src=$("src").value, dst=$("dst").value, times={}, tAll=performance.now();
+  for(const k of ["t0","t1","t2","t3","t4"]) $(k).textContent="–"; $("heard").textContent=""; $("out").textContent="";
+  set("Recording… speak now"); const blob=await record(5); $("t0").textContent="5.0 s";
+  set("Preparing audio…"); const wav=await to16kWav(blob);
+  set("Listening…");
+  const [heard,t1]=await chat([{type:"input_audio",input_audio:{data:b64(wav),format:"wav"}},
+    {type:"text",text:`The speaker is speaking ${src}. Transcribe exactly what they said, written in ${src}. Respond with only the transcription, nothing else.`}]);
+  $("heard").textContent=heard; $("t1").textContent=secs(t1);
+  await translateText(heard, src, dst, tAll, times);
+});
+$("go").onclick=()=>run(async()=>{ const t=$("typed").value.trim(); if(!t) return;
+  ctx(); const times={}, tAll=performance.now(); for(const k of ["t0","t1","t2","t3","t4"]) $(k).textContent="–";
+  $("heard").textContent=t; $("t0").textContent="typed"; $("out").textContent="";
+  await translateText(t,$("src").value,$("dst").value,tAll,times); });
+health(); setInterval(()=>{ if(!busy) health(); }, 5000);
+</script></body></html>

@@ -1,0 +1,81 @@
+[01:09:13] pushed OpenCL build; battery temperature:415
+[01:09:13] === devices the build can see
+ggml_opencl: selected platform: 'QUALCOMM Snapdragon(TM)'
+
+ggml_opencl: device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+Available devices:
+  GPUOpenCL: QUALCOMM Adreno(TM) (5522 MiB, 4498 MiB free)
+[01:09:14] === llama-bench Q4_K_M: language model on CPU (ngl 0) vs GPU (ngl 99), 64-token prompt, 32 generated, 3 repetitions
+ggml_opencl: device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+ggml_opencl: default device: 'QUALCOMM Adreno(TM) (OpenCL 3.0 Adreno(TM) 740)'
+| model                          |       size |     params | backend    | ngl | threads |            test |                  t/s |
+| ------------------------------ | ---------: | ---------: | ---------- | --: | ------: | --------------: | -------------------: |
+| gemma4 E2B Q4_K - Medium       |   3.17 GiB |     4.63 B | OpenCL     |   0 |       4 |            pp64 |         50.99 ± 0.41 |
+| gemma4 E2B Q4_K - Medium       |   3.17 GiB |     4.63 B | OpenCL     |   0 |       4 |            tg32 |         14.17 ± 0.65 |
+| gemma4 E2B Q4_K - Medium       |   3.17 GiB |     4.63 B | OpenCL     |  99 |       4 |            pp64 |         46.73 ± 2.67 |
+| gemma4 E2B Q4_K - Medium       |   3.17 GiB |     4.63 B | OpenCL     |  99 |       4 |            tg32 |          4.46 ± 0.25 |
+[01:10:41] === speech test: cpu_all (-ngl 0 --no-mmproj-offload)  ready in 13 s
+run     eng_1.wav listen 8.31s translate 1.92s | WER 0.0 | heard='The hospital is near the market'
+run     eng_2.wav listen 8.99s translate 2.52s | WER 0.0 | heard='My name is Joel, I am happy to see you.'
+run     eng_3.wav listen 8.81s translate 2.79s | WER 0.0 | heard='I am very sick please take me to the hospital'
+run     lug_4.wav listen 9.54s translate 1.83s | WER 0.8 | heard='Oli otya leero, ntya nyi sso kukulaba?'
+run     lug_5.wav listen 9.32s translate 1.95s | WER 0.17 | heard='Ndi mulwadde nnyo twala mu ddwaliro'
+run     lug_6.wav listen 8.75s translate 1.41s | WER 0.0 | heard='Abaana bagenda ku ssomero'
+MEDIAN listen 8.9s translate 1.9s total 11.3s | mean WER 0.16 | n=6
+[01:12:12] === speech test: encoder_gpu (-ngl 0)  ready in 12 s
+run     eng_1.wav listen 6.12s translate 1.96s | WER 0.0 | heard='The hospital is near the market'
+run     eng_2.wav listen 6.74s translate 2.57s | WER 0.0 | heard='My name is Joel. I am happy to see you.'
+run     eng_3.wav listen 6.67s translate 2.78s | WER 0.0 | heard='I am very sick. Please take me to the hospital'
+run     lug_4.wav listen 7.33s translate 2.06s | WER 0.6 | heard='Oli otya leero, nze Sanyizo Kkulaba'
+run     lug_5.wav listen 7.6s translate 2.11s | WER 0.17 | heard='Ndi mulwadde nnyo twala mu ddwaliro.'
+run     lug_6.wav listen 7.39s translate 1.55s | WER 0.0 | heard='Abaana bagenda ku ssomero.'
+MEDIAN listen 7.0s translate 2.1s total 9.3s | mean WER 0.13 | n=6
+0.09.065.620 W warmup: WARNING: flash attention not supported by OpenCL, memory usage will increase
+0.09.185.911 W warmup: WARNING: the CLIP graph uses unsupported operators by the backend
+0.09.185.913 W warmup:          list of unsupported ops (backend=OpenCL):
+[01:13:43] === speech test: all_gpu (-ngl 99)  ready in 25 s
+run     eng_1.wav listen 22.82s translate 14.97s | WER 0.0 | heard='The hospital is near the market'
+run     eng_2.wav listen 21.6s translate 15.63s | WER 0.0 | heard='My name is Joel. I am happy to see you.'
+run     eng_3.wav listen 21.58s translate 14.05s | WER 0.0 | heard='I am very sick. Please take me to the hospital'
+Traceback (most recent call last):
+  File "/Users/joelmuhanguzi/sunflower-pi-deployment/scripts/fast/phone_bench.py", line 65, in <module>
+    recs = [run(c, True) for c in clips]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/sunflower-pi-deployment/scripts/fast/phone_bench.py", line 65, in <listcomp>
+    recs = [run(c, True) for c in clips]
+            ^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/sunflower-pi-deployment/scripts/fast/phone_bench.py", line 49, in run
+    heard, t_listen, tm_l = chat([
+                            ^^^^^^
+  File "/Users/joelmuhanguzi/sunflower-pi-deployment/scripts/fast/phone_bench.py", line 39, in chat
+    out = json.load(urllib.request.urlopen(req, timeout=900))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/urllib/request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/urllib/request.py", line 519, in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/urllib/request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/urllib/request.py", line 496, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/urllib/request.py", line 1377, in http_open
+    return self.do_open(http.client.HTTPConnection, req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/urllib/request.py", line 1352, in do_open
+    r = h.getresponse()
+        ^^^^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/http/client.py", line 1386, in getresponse
+    response.begin()
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/http/client.py", line 325, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "/Users/joelmuhanguzi/.platformio/python3/lib/python3.11/http/client.py", line 294, in _read_status
+    raise RemoteDisconnected("Remote end closed connection without"
+http.client.RemoteDisconnected: Remote end closed connection without response
+[01:16:26] done; battery 
+PHONE_OPENCL_DONE

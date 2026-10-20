@@ -123,6 +123,7 @@ The Gemma model card's own evaluation (full-precision weights; not re-measured f
 | [Part 6: a second, faster pipeline](docs/06-fast-pipeline.md) | Whisper + NLLB int8 instead of Gemma for listening and translating, kept loaded in memory: about 3× faster per spoken round trip on the Pi 4 in a six-clip head-to-head; a small ONNX voice for English and Luganda; also Orange Pi and Mac measurements |
 | [Part 7: Sunflower Chat](docs/07-sunflower-chat.md) | A conversation app: speak or type to Gemma on the touchscreen, replies streamed, optional spoken replies |
 | [Part 8: Pi 5 and a matched Pi 4 rerun](docs/08-pi5-and-matched-rerun.md) | Both boards measured the same way: six setups, where Whisper's and NLLB's time goes, int8 against float32, Gemma's generation speed, memory |
+| [Part 9: Android phone (Galaxy S23 Ultra)](docs/09-android-phone.md) | Gemma on a phone: CPU builds, Adreno GPU, quantization formats, speech in, ONNX voice, thermal throttling, the on-phone web app; data in `results/phone-s23-2026-10/` |
 | [Benchmarks](docs/benchmarks.md) | Timing, memory, size, including the two pipelines side by side |
 | [Quantization comparison](docs/quantization-sweep.md) | Eight levels: size, translation quality, Pi speed and memory |
 | [Rebuilding from scratch](docs/rebuild-from-scratch.md) | A blank-card rebuild: what was identical, what differed, damaged files |

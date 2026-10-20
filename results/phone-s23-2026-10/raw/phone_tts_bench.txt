@@ -1,0 +1,31 @@
+[01:32:05] pushed; battery temperature:411
+[01:32:05] === mode cpu, vits-lug-eng.fp32.onnx   battery temperature:411
+vits-lug-eng.fp32.onnx [cpu] load: 0.57s
+eng 23 chars, 1.6s audio: 0.668097s, 0.70547s, 0.785897s
+eng 68 chars, 3.6s audio: 1.79676s, 2.07908s, 1.91759s
+lug 33 chars, 2.2s audio: 1.13298s, 1.28166s, 1.16796s
+lug 55 chars, 3.3s audio: 1.75635s, 1.76682s, 1.785s
+exit=0
+[01:32:49] === mode xnnpack, vits-lug-eng.fp32.onnx   battery temperature:413
+vits-lug-eng.fp32.onnx [xnnpack] load: 0.52s
+eng 23 chars, 1.5s audio: 0.661805s, 0.834203s, 0.740057s
+eng 68 chars, 3.6s audio: 1.68404s, 2.11942s, 1.96158s
+lug 33 chars, 2.1s audio: 1.14336s, 1.23585s, 1.13395s
+lug 55 chars, 3.1s audio: 1.86153s, 1.68687s, 1.68517s
+exit=0
+[01:33:32] === mode nnapi, vits-lug-eng.fp32.onnx   battery temperature:415
+vits-lug-eng.fp32.onnx [nnapi] load: 0.62s
+eng 23 chars, 1.3s audio: 0.723276s, 0.819203s, 0.688155s
+eng 68 chars, 3.4s audio: 1.7466s, 1.85452s, 1.88064s
+lug 33 chars, 2.1s audio: 1.66387s, 1.1536s, 1.1544s
+lug 55 chars, 4.1s audio: 1.72543s, 1.70896s, 2.32908s
+exit=0
+[01:34:16] === mode cpu, vits-lug-eng.int8.onnx   battery temperature:419
+vits-lug-eng.int8.onnx [cpu] load: 0.79s
+eng 23 chars, 1.6s audio: 0.289093s, 0.260084s, 0.337277s
+eng 68 chars, 3.6s audio: 0.74346s, 0.819285s, 0.809257s
+lug 33 chars, 2.0s audio: 0.477605s, 0.524119s, 0.455078s
+lug 55 chars, 3.3s audio: 0.883871s, 0.727206s, 0.780013s
+exit=0
+[01:34:47] done; battery temperature:418
+PHONE_TTS_DONE
