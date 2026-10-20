@@ -55,8 +55,23 @@ def record_audio(out_path, seconds=RECORD_SECONDS):
     return result.returncode == 0
 
 
+def _bluetooth_sink_is_default():
+    """True when PipeWire's default output is a Bluetooth speaker."""
+    try:
+        out = subprocess.run(["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"],
+                             capture_output=True, text=True, timeout=3).stdout
+        return "bluez" in out
+    except Exception:
+        return False
+
+
 def play_audio(path):
-    run(["aplay", "-D", SPEAKER_DEVICE, path])
+    # SUNFLOWER_SPEAKER forces an ALSA device; otherwise use a connected
+    # Bluetooth speaker (through PipeWire) and fall back to the USB sound card.
+    if "SUNFLOWER_SPEAKER" not in os.environ and _bluetooth_sink_is_default():
+        run(["pw-play", path])
+    else:
+        run(["aplay", "-D", SPEAKER_DEVICE, path])
 
 
 def llama_audio_understand(audio_path, instruction, n_predict=128, temp=0.3):
