@@ -91,9 +91,9 @@ def _bluetooth_sink_is_default():
 
 
 def play_audio(path):
-    # SUNFLOWER_SPEAKER forces an ALSA device; otherwise use a connected
-    # Bluetooth speaker (through PipeWire) and fall back to the USB sound card.
-    if "SUNFLOWER_SPEAKER" not in os.environ and _bluetooth_sink_is_default():
+    # A connected Bluetooth speaker wins (set SUNFLOWER_SPEAKER_FORCE=1 to skip it);
+    # otherwise play on the ALSA device SUNFLOWER_SPEAKER (the USB sound card).
+    if not os.environ.get("SUNFLOWER_SPEAKER_FORCE") and _bluetooth_sink_is_default():
         run(["pw-play", path])
     else:
         run(["aplay", "-D", SPEAKER_DEVICE, path])
