@@ -1,0 +1,17 @@
+device,conditions,setup,description,listen_s,translate_s,voice_s,total_s,basis
+Pi 4,matched rerun,A,"Gemma per tap, Sunbird VITS per tap",54.5,19.9,21.6,98.4,measured
+Pi 4,matched rerun,B,"Gemma loaded, Sunbird VITS worker",43.8,13.0,7.5,66.1,measured
+Pi 4,matched rerun,E,"Gemma loaded, ONNX voice",43.2,12.0,5.2,63.0,measured
+Pi 4,matched rerun,C,"Whisper + NLLB, Sunbird VITS",19.3,10.9,8.5,40.0,measured
+Pi 4,matched rerun,D,"Whisper + NLLB, ONNX voice",19.3,10.8,5.9,36.6,measured
+Pi 4,matched rerun,C-beam1,"Whisper + NLLB (beam 1), Sunbird VITS",19.3,8.8,7.9,37.2,measured
+Pi 4,matched rerun,D-beam1,"Whisper + NLLB (beam 1), ONNX voice",19.2,8.8,5.3,33.4,measured
+Pi 5,"5 V/5 A, active cooler",A,"Gemma per tap, Sunbird VITS per tap",27.5,10.7,12.8,51.7,measured
+Pi 5,"5 V/5 A, active cooler",B,"Gemma loaded, Sunbird VITS worker",7.1,2.7,2.6,12.3,measured
+Pi 5,"5 V/5 A, active cooler",E,"Gemma loaded, ONNX voice",7.4,3.0,1.7,12.9,measured
+Pi 5,"5 V/5 A, active cooler",C,"Whisper + NLLB, Sunbird VITS",9.0,7.4,3.2,20.1,measured
+Pi 5,"5 V/5 A, active cooler",D,"Whisper + NLLB, ONNX voice",8.8,6.6,1.8,17.5,measured
+Pi 5,"5 V/5 A, active cooler",C-beam1,"Whisper + NLLB (beam 1), Sunbird VITS",10.4,6.5,2.8,20.0,measured
+Pi 5,"5 V/5 A, active cooler",D-beam1,"Whisper + NLLB (beam 1), ONNX voice",9.4,6.0,2.0,17.4,measured
+S23 Ultra,"Galaxy S23 Ultra, KleidiAI/OpenCL build, encoder on GPU",E,"Gemma kept loaded, ONNX voice fp32",7.0,2.1,1.4,10.5,"listen/translate measured, voice estimated"
+S23 Ultra,"Galaxy S23 Ultra, KleidiAI/OpenCL build, encoder on GPU",E-int8,"Gemma kept loaded, ONNX voice int8",7.0,2.1,0.6,9.7,"listen/translate measured, voice estimated"

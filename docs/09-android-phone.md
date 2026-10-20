@@ -17,6 +17,19 @@ Battery temperature is the phone's own sensor, readable at the time of each run 
 
 Pi numbers are from `results/quant-speed.csv`; the phone used the same `llama-bench` settings (64-token prompt, 32 generated). The phone is the fastest of the three devices for generation, mostly because its CPU has int8 matrix instructions and a very fast memory system.
 
+## 1b. Side by side with the Pis (spoken round trip, median seconds)
+
+Same six clips and the same stages as [Part 8](08-pi5-and-matched-rerun.md). Only the "Gemma kept loaded, ONNX voice" path (setup E) was run on the phone.
+
+| Device | Setup | listen | translate | voice | total |
+|---|---|---:|---:|---:|---:|
+| Pi 4 | E | 43.2 | 12.0 | 5.2 | 63.0 |
+| Pi 5 | E | 7.4 | 3.0 | 1.7 | 12.9 |
+| **S23 Ultra** | E, fp32 voice | 7.0 | 2.1 | 1.4* | **10.5** |
+| **S23 Ultra** | E, int8 voice | 7.0 | 2.1 | 0.6* | **9.7** |
+
+\* The voice was timed separately on four test sentences (mean), not on the translated outputs, so the phone totals are estimates. The full set of rows (all setups, both Pis) is in `results/comparison.csv`.
+
 ## 2. CPU build matters more than anything else (Q4_K_M, 4 threads)
 
 | llama.cpp CPU build | prompt tok/s | generation tok/s |

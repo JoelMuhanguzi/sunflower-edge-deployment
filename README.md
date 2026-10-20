@@ -42,13 +42,16 @@ This repository is a reproducible **log of how that was done**, including the de
 
 Median seconds for one spoken round trip (listen, translate, speak) over six recorded 5-second clips, both boards headless from a cold boot with the same scripts. Pi 4: heatsinks and two fans (the soft temperature limit was reached on most runs). Pi 5: active cooler, 5 V / 5 A supply, never throttled. [Full tables, stage splits and caveats](docs/08-pi5-and-matched-rerun.md); raw data in [`results/`](results/README.md).
 
-| Setup | Pi 4 total | Pi 5 total | Pi 5: listen / translate / voice | Pi 5 memory |
-|---|---|---|---|---|
-| A: first app as built (Gemma started per tap) | 98.4 | 51.7 | 27.5 / 10.7 / 12.8 | – |
-| B: Gemma kept loaded, Sunbird VITS voices | 66.1 | **12.3** | 7.1 / 2.7 / 2.6 | 6.6 GB |
-| E: Gemma kept loaded, ONNX voice | 63.0 | 12.9 | 7.4 / 3.0 / 1.7 | 6.1 GB |
-| C: Whisper + NLLB int8, Sunbird VITS voices | 40.0 | 20.1 | 9.0 / 7.4 / 3.2 | 4.4 GB |
-| D: Whisper + NLLB int8, ONNX voice | **36.6** | 17.5 | 8.8 / 6.6 / 1.8 | 3.7 GB |
+| Setup | Pi 4 total | Pi 5 total | Pi 5: listen / translate / voice | Pi 5 memory | S23 Ultra total (listen / translate / voice) |
+|---|---|---|---|---|---|
+| A: first app as built (Gemma started per tap) | 98.4 | 51.7 | 27.5 / 10.7 / 12.8 | – | not run |
+| B: Gemma kept loaded, Sunbird VITS voices | 66.1 | **12.3** | 7.1 / 2.7 / 2.6 | 6.6 GB | not run |
+| E: Gemma kept loaded, ONNX voice | 63.0 | 12.9 | 7.4 / 3.0 / 1.7 | 6.1 GB | **10.5** (7.0 / 2.1 / 1.4*) |
+| E with the int8 ONNX voice | – | – | – | – | **9.7** (7.0 / 2.1 / 0.6*) |
+| C: Whisper + NLLB int8, Sunbird VITS voices | 40.0 | 20.1 | 9.0 / 7.4 / 3.2 | 4.4 GB | not run |
+| D: Whisper + NLLB int8, ONNX voice | **36.6** | 17.5 | 8.8 / 6.6 / 1.8 | 3.7 GB | not run |
+
+\* The phone's listen and translate are measured medians over the same six clips (Gemma's audio encoder on the Adreno GPU, language model on the CPU, Q4_K_M). Its voice time was benchmarked separately on four test sentences (mean of 0.7, 1.9, 1.2 and 1.8 s for fp32; 0.3, 0.8, 0.5 and 0.8 s for int8), not on the translated outputs, so the phone totals are estimates. Only the Gemma path was run on the phone. Details: [Part 9](docs/09-android-phone.md), data: `results/comparison.csv`.
 
 - **The best pipeline depends on the board.** On the Pi 4 the specialist models (Whisper + NLLB) are faster; on the Pi 5 Gemma kept loaded is, because its generation speed rose 3.2× (2.45 to 7.80 tokens/s) and its prompt processing 6.7×, while the CTranslate2 decoders gained about 2×.
 - **Keeping models loaded is the biggest single gain on the Pi 5** (A to B: 51.7 s to 12.3 s).
