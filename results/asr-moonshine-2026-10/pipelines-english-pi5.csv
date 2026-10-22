@@ -1,0 +1,8 @@
+setup,description,n_runs,listen_s,translate_s,voice_s,total_s,peak_rss_mb,throttle_flags
+F-medium,Moonshine medium int8 + NLLB int8 (beam 5) + ONNX voice,9,2.1,13.28,1.95,17.64,3720,0x0
+F-medium-beam1,Moonshine medium int8 + NLLB int8 (beam 1) + ONNX voice,9,2.09,7.52,1.92,11.72,3699,0x0
+G-medium,Moonshine medium int8 + Gemma text translation + ONNX voice,9,2.11,3.82,1.94,7.91,5794,0x0
+G-tiny,Moonshine tiny int8 + Gemma text translation + ONNX voice,9,0.4,3.03,1.73,5.17,5437,0x0
+"D (earlier, English clips only)",Whisper int8 + NLLB int8 (beam 5) + ONNX voice,3,7.72,7.77,2.01,17.56,,0x0
+"D-beam1 (earlier, English clips only)",Whisper int8 + NLLB int8 (beam 1) + ONNX voice,3,8.46,6.63,2.12,17.31,,0x0
+"E (earlier, English clips only)",Gemma audio+text (kept loaded) + ONNX voice,3,7.29,3.69,2.1,13.21,,0x0
