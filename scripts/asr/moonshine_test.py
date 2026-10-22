@@ -47,6 +47,7 @@ ap.add_argument("--sizes", nargs="+", default=["tiny", "small", "medium"])
 ap.add_argument("--clips", nargs="+", required=True)
 ap.add_argument("--repo", default="moonshine-ai/moonshine-streaming-{size}")
 ap.add_argument("--threads", type=int, default=4)
+ap.add_argument("--int8", action="store_true", help="dynamic int8 quantization of the linear layers (PyTorch)")
 args = ap.parse_args()
 torch.set_num_threads(args.threads)
 
@@ -54,6 +55,12 @@ for size in args.sizes:
     repo = args.repo.format(size=size)
     t0 = time.perf_counter()
     model = MoonshineStreamingForConditionalGeneration.from_pretrained(repo).float().eval()
+    if args.int8:
+        torch.backends.quantized.engine = "qnnpack" if "qnnpack" in torch.backends.quantized.supported_engines else torch.backends.quantized.engine
+        model = torch.ao.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
+        torch.save(model.state_dict(), "/tmp/_q.pt")
+        import os
+        print(f"   int8 state dict: {os.path.getsize('/tmp/_q.pt') / 1e6:.0f} MB (engine {torch.backends.quantized.engine})")
     proc = AutoProcessor.from_pretrained(repo)
     load_s = time.perf_counter() - t0
     print(f"== {size}  ({sum(p.numel() for p in model.parameters()) / 1e6:.0f}M parameters, loaded in {load_s:.1f} s)")

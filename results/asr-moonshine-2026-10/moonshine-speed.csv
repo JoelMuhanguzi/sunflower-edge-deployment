@@ -2,6 +2,9 @@ device,model,parameters_m_card,model_file_mb,precision,threads,clips,median_s_pe
 Pi 5 (active cooler),Moonshine streaming tiny,34,172,fp32 (PyTorch CPU),4,3 English,0.70,0.000,throttled=0x0; median of 3 runs per clip
 Pi 5 (active cooler),Moonshine streaming small,123,539,fp32 (PyTorch CPU),4,3 English,2.07,0.000,
 Pi 5 (active cooler),Moonshine streaming medium,245,1018,fp32 (PyTorch CPU),4,3 English,4.36,0.000,
+Pi 5 (active cooler),Moonshine streaming tiny,34,86,int8 (PyTorch dynamic quantization),4,3 English,0.39,0.033,'Joel' heard as 'Jill' once; throttled=0x0
+Pi 5 (active cooler),Moonshine streaming small,123,222,int8 (PyTorch dynamic quantization),4,3 English,1.05,0.033,'Joel' heard as 'Juro' once
+Pi 5 (active cooler),Moonshine streaming medium,245,375,int8 (PyTorch dynamic quantization),4,3 English,2.06,0.000,
 Mac (Apple silicon),Moonshine streaming tiny,34,172,fp32 (PyTorch CPU),4,3 English,0.04,0.000,
 Mac (Apple silicon),Moonshine streaming small,123,539,fp32 (PyTorch CPU),4,3 English,0.11,0.000,
 Mac (Apple silicon),Moonshine streaming medium,245,1018,fp32 (PyTorch CPU),4,3 English,0.21,0.000,
