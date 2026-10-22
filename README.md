@@ -50,6 +50,12 @@ Median seconds for one spoken round trip (listen, translate, speak) over six rec
 | E with the int8 ONNX voice | – | – | – | – | **9.7** (7.0 / 2.1 / 0.6*) |
 | C: Whisper + NLLB int8, Sunbird VITS voices | 40.0 | 20.1 | 9.0 / 7.4 / 3.2 | 4.4 GB | not run |
 | D: Whisper + NLLB int8, ONNX voice | **36.6** | 17.5 | 8.8 / 6.6 / 1.8 | 3.7 GB | not run |
+| **F†**: Moonshine medium int8 + NLLB int8 (beam 5), ONNX voice | not run | 17.6 | 2.1 / 13.3 / 2.0 | 3.7 GB | not run |
+| **F†** with NLLB beam 1 | not run | 11.7 | 2.1 / 7.5 / 1.9 | 3.7 GB | not run |
+| **G†**: Moonshine medium int8 + Gemma translating text, ONNX voice | not run | 7.9 | 2.1 / 3.8 / 1.9 | 5.8 GB | not run |
+| **G†** with Moonshine tiny int8 | not run | 5.2 | 0.4 / 3.0 / 1.7 | 5.4 GB | not run |
+
+† Moonshine is English only, so F and G were run on the **3 English clips only** (English speech to Luganda speech) and cannot be compared with the other rows, which are medians over all six clips. The same 3 clips give D = 17.6 s and E = 13.2 s; see [Part 10](docs/10-moonshine-asr.md) and `results/asr-moonshine-2026-10/pipelines-english-pi5.csv`. Moonshine alone on the Pi 5, 5-second clip: tiny 0.70 s (0.39 s int8), small 2.07 s (1.05 s int8), medium 4.36 s (2.06 s int8).
 
 \* The phone's listen and translate are measured medians over the same six clips (Gemma's audio encoder on the Adreno GPU, language model on the CPU, Q4_K_M). Its voice time was benchmarked separately on four test sentences (mean of 0.7, 1.9, 1.2 and 1.8 s for fp32; 0.3, 0.8, 0.5 and 0.8 s for int8), not on the translated outputs, so the phone totals are estimates. Only the Gemma path was run on the phone. Details: [Part 9](docs/09-android-phone.md), data: `results/comparison.csv`.
 
