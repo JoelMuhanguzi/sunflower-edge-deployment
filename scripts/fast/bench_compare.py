@@ -8,6 +8,8 @@
   C  second app:           Whisper int8 (5 s window) + NLLB int8, loaded once + preloaded voices
   D  C with the character-level ONNX voice (jq/sherpa-vits-tts-lug-eng) for English and Luganda
   E  B (Gemma kept loaded) with the same ONNX voice
+  F  Moonshine streaming (int8, English only) + NLLB int8 + ONNX voice   (English clips only; run in the moonshine venv)
+  G  Moonshine (int8) + Gemma kept loaded as a text-only translator + ONNX voice   (English clips only)
 
 Each clip is spoken in English or Luganda and translated into the other one, then spoken.
 Stages are timed identically in every setup: listen, translate, voice. One setup per
@@ -28,12 +30,14 @@ sys.path.insert(0, f"{HOME}/ml")
 sys.path.insert(0, f"{HOME}/ml/pipeline2")
 
 ap = argparse.ArgumentParser()
-ap.add_argument("config", choices=["A", "B", "C", "D", "E"])
+ap.add_argument("config", choices=["A", "B", "C", "D", "E", "F", "G"])
 ap.add_argument("--clips", default=f"{HOME}/ml/bench_clips/clips.json")
 ap.add_argument("--repeat", type=int, default=1)
 ap.add_argument("--label", default=None, help="name for the result file (default: the config letter)")
 ap.add_argument("--cool", type=float, default=60.0, help="wait until the CPU is below this many C")
 ap.add_argument("--limit", type=int, default=0, help="use only the first N clips (0 = all six)")
+ap.add_argument("--only-src", default=None, help="keep only clips spoken in this language (F and G imply English)")
+ap.add_argument("--moonshine-size", default=os.environ.get("MOONSHINE_SIZE", "medium"), help="tiny, small or medium")
 args = ap.parse_args()
 
 OUT_DIR = f"{HOME}/ml/bench_results"
@@ -256,14 +260,116 @@ class SetupE(SetupB):
         self.srv.terminate()
 
 
+class MoonshineMixin:
+    """English speech -> text with a Moonshine streaming model, int8 (PyTorch dynamic quantization), loaded once."""
+
+    def start_listener(self):
+        import torch
+        from transformers import AutoProcessor, MoonshineStreamingForConditionalGeneration
+        t0 = time.time()
+        torch.set_num_threads(4)
+        path = f"{HOME}/ml/moonshine_models/{args.moonshine_size}"
+        model = MoonshineStreamingForConditionalGeneration.from_pretrained(path).float().eval()
+        torch.backends.quantized.engine = "qnnpack"
+        self.ms_model = torch.ao.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype=torch.qint8)
+        self.ms_proc = AutoProcessor.from_pretrained(path)
+        self.torch = torch
+        return time.time() - t0
+
+    def listen(self, wav, lang):
+        if lang != "English":
+            raise RuntimeError("Moonshine streaming is English only")
+        from scipy.io import wavfile
+        rate, data = wavfile.read(wav)
+        audio = (data.astype("float32") / 32768.0)
+        sr = self.ms_proc.feature_extractor.sampling_rate
+        if rate != sr:
+            from scipy.signal import resample_poly
+            audio = resample_poly(audio, sr, rate)
+        inputs = self.ms_proc(audio, return_tensors="pt", sampling_rate=sr)
+        max_len = int((inputs.attention_mask.sum(dim=-1) * 6.5 / sr).max().item())
+        with self.torch.no_grad():
+            ids = self.ms_model.generate(**inputs, max_length=max_len)
+        return self.ms_proc.decode(ids[0], skip_special_tokens=True).strip(), {"gen": {"n": int(ids.shape[-1])}}
+
+
+class OnnxVoiceMixin:
+    def start_voices(self):
+        from char_voice import CharVoice
+        t0 = time.time()
+        self.cv = CharVoice()
+        return time.time() - t0
+
+    def speak(self, text, dst):
+        res = self.cv.speak(text, WAV_OUT)
+        return bool(res.get("ok")), {"path": "onnx", **res}
+
+
+class SetupF(MoonshineMixin, OnnxVoiceMixin):
+    """Moonshine int8 (listen) + NLLB int8 (translate) + ONNX voice."""
+
+    def __init__(self):
+        from nllb_translate import Translator
+        t0 = time.time()
+        self.translator = Translator(f"{HOME}/ml/pipeline2/models/nllb-salt-ct2-int8")
+        iso = {"English": "eng", "Luganda": "lug"}
+        self.iso = iso
+        self.startup = (time.time() - t0) + self.start_listener() + self.start_voices()
+
+    def translate(self, text, src, dst):
+        out = self.translator.translate(" ".join(text.split()), self.iso[src], self.iso[dst])
+        return out, {"gen": {"n": self.translator.last_tokens}}
+
+    def close(self):
+        pass
+
+
+class SetupG(MoonshineMixin, OnnxVoiceMixin):
+    """Moonshine int8 (listen) + Gemma kept loaded in llama-server WITHOUT its audio encoder (translate) + ONNX voice."""
+    URL = "http://127.0.0.1:8081"
+
+    def __init__(self):
+        import sunflower_touch_ui_per_tap as old
+        t0 = time.time()
+        self.srv = subprocess.Popen(
+            [f"{HOME}/ml/llama.cpp/build/bin/llama-server", "-m", old.TEXT_MODEL, "--jinja", "--host", "127.0.0.1",
+             "--port", "8081", "-c", "2048", "-t", "4"],
+            stdout=open(f"{OUT_DIR}/llama-server.log", "w"), stderr=subprocess.STDOUT)
+        while True:
+            try:
+                if b"ok" in urllib.request.urlopen(self.URL + "/health", timeout=3).read():
+                    break
+            except Exception:
+                time.sleep(3)
+            if self.srv.poll() is not None:
+                raise RuntimeError("llama-server exited")
+        self.startup = (time.time() - t0) + self.start_listener() + self.start_voices()
+
+    def translate(self, text, src, dst):
+        body = json.dumps({"messages": [{"role": "user", "content": translate_prompt(text, dst)}], "max_tokens": 128,
+                           "temperature": 0.3, "cache_prompt": False}).encode()
+        req = urllib.request.Request(self.URL + "/v1/chat/completions", body, {"Content-Type": "application/json"})
+        out = json.load(urllib.request.urlopen(req, timeout=900))
+        tm = out.get("timings", {})
+        return (out["choices"][0]["message"]["content"].strip(),
+                {"gen": {"n": tm.get("predicted_n"), "tps": tm.get("predicted_per_second")}})
+
+    def close(self):
+        self.srv.terminate()
+
+
 # ---------------------------------------------------------------- run
 clips = json.load(open(args.clips))
+if args.config in ("F", "G"):
+    args.only_src = "English"
+if args.only_src:
+    clips = [c for c in clips if c["lang"] == args.only_src]
 if args.limit:
     clips = clips[:args.limit]
 waited = wait_cool()
 print(f"config {args.config}: waited {waited}s for cooldown, CPU {cpu_temp():.0f} C, flags {throttled()}", flush=True)
 t0 = time.time()
-setup = {"A": SetupA, "B": SetupB, "C": SetupC, "D": SetupD, "E": SetupE}[args.config]()
+setup = {"A": SetupA, "B": SetupB, "C": SetupC, "D": SetupD, "E": SetupE, "F": SetupF, "G": SetupG}[args.config]()
 print(f"setup ready: startup {setup.startup:.1f}s (models/voices loaded once; 0 for A)", flush=True)
 
 plan = []
