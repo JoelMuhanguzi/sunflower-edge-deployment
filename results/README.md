@@ -14,6 +14,9 @@ Everything here was measured on the hardware named in the main [README](../READM
 | `pi4-headtohead-2026-10-06/` | One JSON line per clip per setup, including heard text, translation, per-stage times, CPU temperature and throttle flags; `app-session-log.jsonl` is the app's own log. Has its own README | head-to-head tables |
 | `voice-onnx-2026-10-07/` | Raw output of the ONNX voice tests (Pi 4 timings, Mac listening check) | Part 6 voice section |
 | `quant-sweep/` | Gemma quantization sweep: per-sentence outputs for each level, scores, Pi `llama-bench` JSON, the scripts and logs | [Quantization comparison](../docs/quantization-sweep.md) |
+| `comparison.csv` | Pi 4, Pi 5 and Galaxy S23 Ultra side by side for the spoken round trip (listen, translate, voice, total). Hand-assembled from `headtohead.csv` and the phone files; the phone voice time is an estimate | README results table, [Part 9](../docs/09-android-phone.md) |
+| `phone-s23-2026-10/` | Galaxy S23 Ultra: `phone-speed.csv` (CPU builds, Adreno GPU, five quantization formats), `phone-speech.csv` (listen and translate with the encoder on CPU or GPU), `phone-voice.csv` (ONNX voice, CPU/XNNPACK/NNAPI, fp32 and int8), `raw/` logs | [Part 9](../docs/09-android-phone.md) |
+| `asr-moonshine-2026-10/` | Moonshine streaming tiny/small/medium, fp32 and int8, on the Pi 5 and the Mac (`moonshine-speed.csv`); pipelines F and G against D and E on the English clips (`pipelines-english-pi5.csv`) with the raw per-run files in `pipelines/` (heard text, translation, timings, memory) | [Part 10](../docs/10-moonshine-asr.md) |
 
 ## Caveats to carry into any paper
 
