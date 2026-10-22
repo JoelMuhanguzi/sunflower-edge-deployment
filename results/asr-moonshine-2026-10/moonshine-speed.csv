@@ -1,0 +1,9 @@
+device,model,parameters_m_card,model_file_mb,precision,threads,clips,median_s_per_5s_clip,mean_WER,notes
+Pi 5 (active cooler),Moonshine streaming tiny,34,172,fp32 (PyTorch CPU),4,3 English,0.70,0.000,throttled=0x0; median of 3 runs per clip
+Pi 5 (active cooler),Moonshine streaming small,123,539,fp32 (PyTorch CPU),4,3 English,2.07,0.000,
+Pi 5 (active cooler),Moonshine streaming medium,245,1018,fp32 (PyTorch CPU),4,3 English,4.36,0.000,
+Mac (Apple silicon),Moonshine streaming tiny,34,172,fp32 (PyTorch CPU),4,3 English,0.04,0.000,
+Mac (Apple silicon),Moonshine streaming small,123,539,fp32 (PyTorch CPU),4,3 English,0.11,0.000,
+Mac (Apple silicon),Moonshine streaming medium,245,1018,fp32 (PyTorch CPU),4,3 English,0.21,0.000,
+Pi 5 (active cooler),Gemma 4 E2B audio listen (for comparison),,990,F16 encoder + Q4_K_M,4,6 clips (3 Eng + 3 Lug),7.4,0.09,from results/headtohead.csv setup E
+Pi 5 (active cooler),SunflowerASR-51 Whisper large-v3 fine-tune (for comparison),,1560,int8 (CTranslate2),4,6 clips (3 Eng + 3 Lug),8.8,0.06,from results/headtohead.csv setup D
