@@ -2,7 +2,7 @@
 """
 Sunflower Translate (hands-free): say "Hey Sunflower", say something in English, hear it in Luganda.
 
-  wake word  ->  chime  ->  Moonshine streaming (int8, English) writes down what was said
+  wake word ("sunflower", found by Moonshine in a short stretch of speech)  ->  chime  ->  Moonshine streaming (int8, English) writes down what was said
              ->  Gemma (kept loaded, text only, no audio encoder) translates it into Luganda
              ->  the ONNX voice speaks the Luganda, sentence by sentence
 
@@ -77,6 +77,7 @@ class TranslateApp(vui.VoiceApp):
         import torch
         from transformers import AutoProcessor, MoonshineStreamingForConditionalGeneration
         t0 = time.perf_counter()
+        vui.set_mic_levels()
         self.status("Loading Gemma (text only)...")
         self.srv_proc = start_text_only_server()
         self.server = base.GemmaServer(ctx=2048)  # finds the server above and reuses it
@@ -99,16 +100,44 @@ class TranslateApp(vui.VoiceApp):
         super().close()
 
     def _hear(self, wav_path):
-        """English speech -> text with Moonshine."""
+        """English speech -> text with Moonshine (a wav file)."""
         from scipy.io import wavfile
         rate, data = wavfile.read(wav_path)
-        audio = data.astype("float32") / 32768.0
+        return self._hear_array(data.astype("float32") / 32768.0)
+
+    def _hear_array(self, audio):
+        """English speech -> text with Moonshine (float32 audio at 16 kHz)."""
         sr = self.ms_proc.feature_extractor.sampling_rate
         inputs = self.ms_proc(audio, return_tensors="pt", sampling_rate=sr)
         max_len = int((inputs.attention_mask.sum(dim=-1) * 6.5 / sr).max().item())
         with self.torch.no_grad():
             ids = self.ms_model.generate(**inputs, max_length=max_len)
         return self.ms_proc.decode(ids[0], skip_special_tokens=True).strip()
+
+    def _wait_for_wake(self):
+        """Wake on the word "sunflower": Moonshine writes down each short stretch of speech and the text is searched.
+        Hum and silence never reach it (a voice-activity detector gates it), so it cannot chime by itself."""
+        sys.path.insert(0, os.path.join(HERE, "wake"))
+        from moonshine_wake import MoonshineWake
+        self.set_state("waiting")
+        self.manual.clear()
+        det = MoonshineWake(self._hear_array, log=self._log_wake, save_dir=f"{base.SCRATCH}/wake_segments")
+        mic = vui.Mic(base.MIC_DEVICE)
+        try:
+            while not self.closing:
+                chunk = mic.read()
+                if det.feed(chunk) or self.manual.is_set():
+                    self.wake_time = time.perf_counter()
+                    return
+        finally:
+            mic.close()
+
+    def _log_wake(self, rec):
+        try:
+            with open(f"{base.SCRATCH}/wake_log.jsonl", "a") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
 
     def _turn(self):
         rec = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "src": "English", "dst": "Luganda", "moonshine": MOONSHINE_SIZE}

@@ -116,6 +116,19 @@ class Mic:
         self.proc.wait()
 
 
+def set_mic_levels(device=None):
+    """Put the USB microphone at a known setting: capture gain 62% and Auto Gain Control off.
+
+    At 100% gain with the mic's Auto Gain Control on, the room noise doubled and loud speech clipped, and wake-word
+    recognition fell to about 40%; at 62% with it off it was reliable at close range (Part 11)."""
+    m = re.search(r"(?:hw|plughw):(\d+)", device or base.MIC_DEVICE)
+    if not m:
+        return
+    card = m.group(1)
+    for cmd in (["amixer", "-c", card, "sset", "Mic", "10"], ["amixer", "-c", card, "sset", "Auto Gain Control", "off"]):
+        subprocess.run(cmd, capture_output=True, check=False)
+
+
 def make_chime(path=CHIME, notes=((660, 0.12), (880, 0.18))):
     """A short chime: the default two notes are played after the wake word."""
     sr = 22050
@@ -241,6 +254,7 @@ class VoiceApp:
             free = base.mem_available_gb()
             if free < base.MIN_FREE_GB:
                 raise RuntimeError(f"Only {free:.1f} GB free. Close the other Sunflower app, then reopen this one.")
+        set_mic_levels()
         self.status("Loading Gemma (1 to 2 minutes)...")
         self.server = base.GemmaServer(ctx=CONTEXT)
         self.status("Loading voice...")

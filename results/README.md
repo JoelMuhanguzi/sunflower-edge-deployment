@@ -17,6 +17,7 @@ Everything here was measured on the hardware named in the main [README](../READM
 | `comparison.csv` | Pi 4, Pi 5 and Galaxy S23 Ultra side by side for the spoken round trip (listen, translate, voice, total). Hand-assembled from `headtohead.csv` and the phone files; the phone voice time is an estimate | README results table, [Part 9](../docs/09-android-phone.md) |
 | `phone-s23-2026-10/` | Galaxy S23 Ultra: `phone-speed.csv` (CPU builds, Adreno GPU, five quantization formats), `phone-speech.csv` (listen and translate with the encoder on CPU or GPU), `phone-voice.csv` (ONNX voice, CPU/XNNPACK/NNAPI, fp32 and int8), `raw/` logs | [Part 9](../docs/09-android-phone.md) |
 | `asr-moonshine-2026-10/` | Moonshine streaming tiny/small/medium, fp32 and int8, on the Pi 5 and the Mac (`moonshine-speed.csv`); pipelines F and G against D and E on the English clips (`pipelines-english-pi5.csv`) with the raw per-run files in `pipelines/` (heard text, translation, timings, memory) | [Part 10](../docs/10-moonshine-asr.md) |
+| `wake-word-2026-10/` | Live logs of the Moonshine wake-word test on the Pi 5: one JSON line per stretch of speech examined (what Moonshine heard, whether it woke, length, peak level), four runs A to D with different phrases and microphone settings. The audio itself is not stored | [Part 11](../docs/11-hands-free-wake-word.md) |
 
 ## Caveats to carry into any paper
 

@@ -134,6 +134,7 @@ The Gemma model card's own evaluation (full-precision weights; not re-measured f
 | [Part 8: Pi 5 and a matched Pi 4 rerun](docs/08-pi5-and-matched-rerun.md) | Both boards measured the same way: six setups, where Whisper's and NLLB's time goes, int8 against float32, Gemma's generation speed, memory |
 | [Part 9: Android phone (Galaxy S23 Ultra)](docs/09-android-phone.md) | Gemma on a phone: CPU builds, Adreno GPU, quantization formats, speech in, ONNX voice, thermal throttling, the on-phone web app; data in `results/phone-s23-2026-10/` |
 | [Part 10: Moonshine and Gemma in the middle](docs/10-moonshine-asr.md) | A small English-only recogniser (Moonshine, fp32 and int8) for the listening stage, and Gemma as the text translator: English speech to Luganda speech in 5 to 8 s on the Pi 5; quantization steps, speeds, caveats |
+| [Part 11: Hands-free voice and the wake word](docs/11-hands-free-wake-word.md) | Say "Sunflower", hear a chime, speak, hear the answer: the two hands-free apps, a custom wake-word model that failed live, wake by Moonshine transcription, microphone hum, gain and Auto Gain Control findings, live results |
 | [Benchmarks](docs/benchmarks.md) | Timing, memory, size, including the two pipelines side by side |
 | [Quantization comparison](docs/quantization-sweep.md) | Eight levels: size, translation quality, Pi speed and memory |
 | [Rebuilding from scratch](docs/rebuild-from-scratch.md) | A blank-card rebuild: what was identical, what differed, damaged files |
