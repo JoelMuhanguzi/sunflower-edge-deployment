@@ -11,7 +11,7 @@ Both show the state as an animated circle on the 480x320 screen (waiting, listen
 and three rising notes mean "loaded". Sound goes to a connected Bluetooth speaker when there is one (Part 8, setup notes).
 Every turn is logged (`voice_log.jsonl`, `translate_voice_log.jsonl`) with stage times. The Translate app has completed turns correctly end to end; the Gemma-listening Voice app ran end to end on 20 and 23 October but its transcriptions were unusable (see 6).
 
-Raw logs of the wake-word tests: [`results/wake-word-2026-10/`](../results/wake-word-2026-10/).
+Raw logs of the wake-word tests: [`results/wake-word-2026-10/`](../results/wake-word-2026-10/). The room had other people in it, so any logged transcript longer than five words that did not wake the app is replaced by a placeholder.
 
 ## 1. How one turn works
 
