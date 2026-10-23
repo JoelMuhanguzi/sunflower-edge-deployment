@@ -46,6 +46,7 @@ END_SILENCE_S = 1.0          # the question ends after this much silence
 CHUNK = 1280                 # 80 ms at 16 kHz
 LOG_PATH = f"{base.SCRATCH}/voice_log.jsonl"
 CHIME = "/tmp/sunflower_chime.wav"
+READY = "/tmp/sunflower_ready.wav"
 
 BG, FG, GREY = "#1a1a1a", "#f0f0f0", "#8a8a8a"
 COLORS = {"loading": "#555555", "waiting": "#d98b43", "listening": "#3fbf6f", "thinking": "#4aa3ff", "speaking": "#ffaa28"}
@@ -58,8 +59,14 @@ def instruction(lang):
             f"Reply in {lang}. Keep answers short: one to three plain sentences, with no lists or symbols.")
 
 
+def strip_tokens(text):
+    """Remove leftover model control markers such as <|turn>."""
+    return re.sub(r"<\|?[^<>\s]{0,24}\|?>", "", text)
+
+
 def clean_for_speech(text):
     """Remove markdown and emoji so the voice reads plain words."""
+    text = strip_tokens(text)
     text = re.sub(r"[*_#`>~]+", "", text)
     text = re.sub(r"[^\x00-ɏ‘-”]", "", text)  # keep Latin letters and common quotes
     return " ".join(text.split())
@@ -109,11 +116,11 @@ class Mic:
         self.proc.wait()
 
 
-def make_chime(path=CHIME):
-    """A short two-note chime, played after the wake word."""
+def make_chime(path=CHIME, notes=((660, 0.12), (880, 0.18))):
+    """A short chime: the default two notes are played after the wake word."""
     sr = 22050
     parts = []
-    for hz, secs in ((660, 0.12), (880, 0.18)):
+    for hz, secs in notes:
         t = np.arange(int(sr * secs)) / sr
         parts.append(np.sin(2 * np.pi * hz * t) * np.minimum(1, np.minimum(t, secs - t) * 80) * 9000)
     with wave.open(path, "wb") as w:
@@ -241,6 +248,7 @@ class VoiceApp:
             raise RuntimeError("The ONNX voice needs the pipeline2 Python (onnxruntime, scipy).")
         self.voice = base.CharVoice()
         make_chime()
+        make_chime(READY, ((523, 0.12), (659, 0.12), (784, 0.25)))  # three rising notes: loaded and listening
         self.status(f"Ready (loaded in {time.perf_counter() - t0:.0f} s)")
 
     def _new_wake(self):
@@ -255,6 +263,8 @@ class VoiceApp:
             self.status(f"Start-up failed: {e}")
             print("start-up failed:", repr(e), flush=True)
             return
+        if not MOCK:
+            base.play_audio(READY)
         while not self.closing:
             try:
                 self._wait_for_wake()
@@ -289,7 +299,7 @@ class VoiceApp:
         """Record one question: from the first speech until END_SILENCE_S of quiet. Returns a wav path or None."""
         from openwakeword.vad import VAD
         from scipy.signal import butter, sosfilt, sosfilt_zi
-        hp = butter(4, 120, "hp", fs=16000, output="sos")  # mains hum
+        hp = butter(4, 250, "hp", fs=16000, output="sos")  # mains hum has strong harmonics up to about 200 Hz
         zi, vad = sosfilt_zi(hp) * 0, VAD()
         mic, chunks, pre, started, quiet, speech_run = Mic(base.MIC_DEVICE), [], [], False, 0, 0
         t0 = time.perf_counter()
@@ -314,10 +324,15 @@ class VoiceApp:
         finally:
             mic.close()
             self.level = 0.0
+        audio = np.concatenate(chunks).astype(np.float64)
+        # After the hum is filtered out the voice is quiet (the model could not hear it): bring the peak to 80% of full scale
+        peak = np.abs(audio).max()
+        if peak > 0:
+            audio *= min(8.0, 0.8 * 32767 / peak)
         path = f"{base.SCRATCH}/voice_input.wav"
         with wave.open(path, "wb") as w:
             w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
-            w.writeframes(np.concatenate(chunks).tobytes())
+            w.writeframes(np.clip(audio, -32768, 32767).astype(np.int16).tobytes())
         return path
 
     def _messages(self, lang):
@@ -343,7 +358,7 @@ class VoiceApp:
         rec["question_s"] = round(time.perf_counter() - t0, 2)
         self.set_state("thinking")
         t1 = time.perf_counter()
-        text = self.server.transcribe(audio, lang)
+        text = strip_tokens(self.server.transcribe(audio, lang)).strip()
         rec["listen_s"] = round(time.perf_counter() - t1, 2)
         if not text:
             self.status("Could not make out any speech.")
@@ -361,16 +376,21 @@ class VoiceApp:
         for piece in self.server.stream_chat(self._messages(lang), max_tokens=MAX_REPLY_TOKENS):
             if t_first is None:
                 t_first = time.perf_counter()
+            piece = strip_tokens(piece)
             reply += piece
             self.ui(self.bot_var.set, reply.strip()[-200:])
             for s in splitter.add(piece):
                 sentences.put(s)
         for s in splitter.rest():
             sentences.put(s)
-        sentences.put(None)
         rec["first_word_s"] = round((t_first or time.perf_counter()) - t2, 2)
         rec["reply"] = reply.strip()
-        self.history.append({"role": "assistant", "content": reply.strip()})
+        if reply.strip():
+            self.history.append({"role": "assistant", "content": reply.strip()})
+        else:  # an empty answer must not stay in the conversation (it keeps later answers empty)
+            self.history.pop()
+            sentences.put("Sorry, I did not catch that." if lang == "English" else "Nsonyiwa, saategedde.")
+        sentences.put(None)
         speaker.join()
         if first_sound:
             rec["wake_to_first_sound_s"] = round(first_sound[0] - self.wake_time, 2)
