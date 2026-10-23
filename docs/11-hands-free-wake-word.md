@@ -70,6 +70,11 @@ Counts are speech stretches examined by Moonshine, not attempts: the number of t
 | C | "sunflower" ×10 | 100%, AGC on | 8 | 3 | "It's not a flower", "Sunflower", "It's sunflower" | most stretches reached full scale |
 | D | "sunflower" ×10 | **62%, AGC off** | 21 | 4 | "Sunflower" ×4 | the last four attempts, all close and firm, all woke |
 
+**Run E: an hour of ordinary room noise.** After the app was restarted with the mic settings applied by the app itself, it ran for about 55 minutes in an office where people were talking and chatting (09:36 to 10:31).
+Moonshine examined **345 stretches of speech** and the wake word fired **twice**: once on the author's own test (a real turn) and once on background conversation that contained the word "flower"
+("Is it a flower?"), which is a false wake of about one per hour of continuous talk. The detector cannot tell the word spoken to it from the same word spoken in conversation. Most transcripts of the room were invented or fragments, as in the quiet-voice case.
+The transcripts and audio of that hour include other people's speech and are deliberately **not** in the repository; only these counts are. The false-wake turn's transcript was removed from the saved turn log for the same reason.
+
 What the saved audio showed (not stored in the repo, it is recordings of a voice): the stretches that woke had peaks of 13,000 to 22,000 after filtering; stretches with peaks of 1,800 to 6,500 came back empty or as invented sentences
 ("I'm going to go to the bathroom"), so a quiet or distant voice is hallucinated into other words. Re-running eight clear stretches with five clean-up variants (different gain, 300 or 400 Hz high-pass) did not recover the misses.
 Dropping "hey" helps: Moonshine blurs it into the next word ("Handsome flower", "Haste and flower").
@@ -83,13 +88,13 @@ This is a small test by one speaker in one room: it is not an accuracy figure.
   After raising it to 250 Hz and normalising the level, three further turns still produced invented text ("I cannot generate content containing…", "The Samsung Galaxy Note 7 was a major recall…").
   The mic was probably still at 100% gain with AGC on at that time (section 2), which was not known then, and Gemma listening was not retried afterwards. The Moonshine route, which heard the same mic correctly, was used instead.
 - **Empty replies.** Gemma sometimes returns only a control marker (`<|turn>`); these are now removed, and an empty reply is no longer stored in the conversation history (it kept later replies empty). The app says "Sorry, I did not catch that" instead.
-- **A 3-turn run of the Translate app** (before the wake-word work above, logged in `results/asr-moonshine-2026-10/handsfree-translate-log-2026-10-23.jsonl`): Moonshine 1.7 to 2.5 s, translation 2.8 to 4.2 s, 5.8 to 7.5 s from the end of the question to the first sound.
+- **The first Translate app turns** (before the wake-word work above, logged in `results/asr-moonshine-2026-10/handsfree-translate-log-2026-10-23.jsonl`): Moonshine 1.7 to 2.5 s, translation 2.8 to 4.2 s, 5.8 to 7.5 s from the end of the question to the first sound.
 - **Input limit:** a question is cut at 10 s, the pause that ends it is 1 s, and a translation is limited to 128 tokens (roughly one or two sentences).
 - Operational trap: stopping the app by pattern (`pkill -f`) over `ssh` can kill the ssh session itself; stop by process id.
 
 ## 7. Open questions
 
-1. Test the wake word with other speakers, accents and distances; measure false wakes over an hour of real room noise. Everything here is one speaker.
+1. Test the wake word with other speakers, accents and distances. Everything here is one speaker; the hour of room noise (run E) gave about one false wake, and the number of real attempts in that hour was not recorded, so there is no hit rate for it.
 2. Separate the effects of gain and AGC (they were changed together).
 3. A better microphone (a USB speakerphone) would likely help more than any software.
 4. A combined detector (Moonshine or the custom model) and a tap on the screen as a fallback.
